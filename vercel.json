@@ -1,0 +1,17 @@
+{
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/[...path]"
+    }
+  ],
+  "functions": {
+    "api/[...path].js": {
+      "runtime": "nodejs20.x",
+      "maxDuration": 60
+    }
+  }
+}
