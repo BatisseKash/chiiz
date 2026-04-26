@@ -1,0 +1,37 @@
+{
+  "name": "chiiz-pilot",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "dev:client": "vite",
+    "dev:server": "node server.js",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "lucide-react": "^1.7.0",
+    "plaid": "^41.4.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.8.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.3"
+  }
+}
