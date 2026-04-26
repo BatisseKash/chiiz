@@ -3498,8 +3498,12 @@ app.get(/^(?!\/api).*/, (req, res) => {
   return res.sendFile(path.join(distDir, 'index.html'));
 });
 
-app.listen(3000, () => {
-  console.log(`Server running on http://localhost:3000 (boot ${SERVER_BOOT_ID})`);
-  console.log('Plaid sync uses stored encrypted access tokens and transactions/sync cursors.');
-  console.log('TODO: add webhook-triggered sync and persisted item health tracking for production.');
-});
+if (require.main === module) {
+  app.listen(3000, () => {
+    console.log(`Server running on http://localhost:3000 (boot ${SERVER_BOOT_ID})`);
+    console.log('Plaid sync uses stored encrypted access tokens and transactions/sync cursors.');
+    console.log('TODO: add webhook-triggered sync and persisted item health tracking for production.');
+  });
+}
+
+module.exports = app;
