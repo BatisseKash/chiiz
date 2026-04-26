@@ -1729,7 +1729,7 @@ app.get('/api/debug', async (req, res) => {
   });
 });
 
-app.post('/api/auth/forgot_password', async (req, res) => {
+app.post(['/api/auth/forgot_password', '/auth/forgot_password'], async (req, res) => {
   try {
     const email = String(req.body?.email || '')
       .trim()
@@ -1825,7 +1825,7 @@ app.post('/api/auth/forgot_password', async (req, res) => {
   }
 });
 
-app.post('/api/auth/reset_password', async (req, res) => {
+app.post(['/api/auth/reset_password', '/auth/reset_password'], async (req, res) => {
   try {
     const token = String(req.body?.token || '').trim();
     const password = String(req.body?.password || '');
@@ -1915,7 +1915,7 @@ app.post('/api/auth/reset_password', async (req, res) => {
   }
 });
 
-app.post('/api/auth/signup', async (req, res) => {
+app.post(['/api/auth/signup', '/auth/signup'], async (req, res) => {
   try {
     const { firstName, lastName, email, password } = normalizeAuthInput(req.body);
 
@@ -1979,7 +1979,7 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
   try {
     const { email, password } = normalizeAuthInput(req.body);
 
@@ -2058,12 +2058,12 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.post('/api/auth/logout', (req, res) => {
+app.post(['/api/auth/logout', '/auth/logout'], (req, res) => {
   clearSessionCookie(res);
   return res.json({ success: true });
 });
 
-app.get('/api/auth/session', requireAuth, async (req, res) => {
+app.get(['/api/auth/session', '/auth/session'], requireAuth, async (req, res) => {
   try {
     const profile = await fetchProfileById(req.userId);
 
