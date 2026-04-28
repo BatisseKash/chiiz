@@ -60,7 +60,7 @@ const PLAID_COUNTRY_CODES = ['US'];
 const SERVER_BOOT_ID = new Date().toISOString();
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://boozhciuxaqfbxvjbnsi.supabase.co';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.5';
 const SUPABASE_PUBLISHABLE_KEY =
   process.env.SUPABASE_PUBLISHABLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
