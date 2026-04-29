@@ -343,6 +343,24 @@ function App() {
     return monthValueFromDate(new Date());
   }, [dashboardSelectedMonths, monthOptions]);
 
+  const needsReviewCount = useMemo(() => {
+    const isConfirmedTransaction = (transaction: PlaidTransaction) => {
+      const source = String(transaction.categorization_source || '').toLowerCase();
+      const sourceIsConfirmed =
+        source === 'user' || source === 'rule' || source === 'mapped' || source === 'ai';
+      return (
+        Boolean(transaction.ignored_from_budget) ||
+        Boolean(transaction.category_id) ||
+        sourceIsConfirmed
+      );
+    };
+
+    return transactions.reduce(
+      (count, transaction) => (isConfirmedTransaction(transaction) ? count : count + 1),
+      0,
+    );
+  }, [transactions]);
+
   const dashboardRange = useMemo(
     () => getDashboardRange(dashboardTimePreset, dashboardSelectedMonths, dashboardYear, monthOptions),
     [dashboardSelectedMonths, dashboardTimePreset, dashboardYear, monthOptions],
@@ -1105,14 +1123,6 @@ function App() {
     incomeCategories: Array<{ name: string; budget: number }>;
     expenseCategories: Array<{ name: string; budget: number }>;
   }) {
-    // If this new budget will be the default, unset the current default first
-    if (payload.isDefault) {
-      const currentDefault = categorySets.find((b) => b.isDefault);
-      if (currentDefault) {
-        await updateBudget(currentDefault.id, { isDefault: false });
-      }
-    }
-
     const created = await createBudget({ name: payload.name, isDefault: payload.isDefault });
     const createdBudget = created.budget || created.categorySet;
     if (!createdBudget) {
@@ -1427,7 +1437,11 @@ function App() {
         onSelectView={setActiveView}
         onSignOut={handleSignOut}
       />
-      <Sidebar activeView={activeView} onSelect={setActiveView} />
+      <Sidebar
+        activeView={activeView}
+        onSelect={setActiveView}
+        needsReviewCount={needsReviewCount}
+      />
 
       <div className="min-w-0">
         <TopNav

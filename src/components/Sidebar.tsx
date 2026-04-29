@@ -4,6 +4,7 @@ import type { View } from '../types';
 type SidebarProps = {
   activeView: View;
   onSelect: (view: View) => void;
+  needsReviewCount?: number;
 };
 
 const navItems: Array<{ id: View; label: string; icon: typeof LayoutDashboard }> = [
@@ -14,7 +15,7 @@ const navItems: Array<{ id: View; label: string; icon: typeof LayoutDashboard }>
 ];
 const logoUrl = new URL('../../Chiiz logo.png', import.meta.url).href;
 
-export function Sidebar({ activeView, onSelect }: SidebarProps) {
+export function Sidebar({ activeView, onSelect, needsReviewCount = 0 }: SidebarProps) {
   return (
     <aside className="hidden h-screen w-full flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] lg:flex">
       <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-6 py-5">
@@ -56,6 +57,11 @@ export function Sidebar({ activeView, onSelect }: SidebarProps) {
                   strokeWidth={1.6}
                 />
                 <span className={isActive ? 'font-semibold' : ''}>{item.label}</span>
+                {item.id === 'transactions' && needsReviewCount > 0 ? (
+                  <span className="ml-auto inline-flex min-w-[22px] items-center justify-center rounded-full bg-[#f59e0b] px-1.5 py-0.5 text-xs font-semibold leading-none text-white">
+                    {needsReviewCount}
+                  </span>
+                ) : null}
               </button>
             );
           })}

@@ -2010,39 +2010,43 @@ app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
 
     setSessionCookie(res, profile.id);
 
-    let sync = {
+    const sync = {
       total_items: 0,
       synced_items: [],
       failed_items: [],
     };
-    let categorization = {
+    const categorization = {
       categorizedCount: 0,
       needsReviewCount: 0,
       skippedCount: 0,
       totalConsidered: 0,
-      skippedReason: null,
+      skippedReason: 'Deferred to background sync after login.',
     };
 
-    try {
-      sync = await plaidSyncService.syncAllUserItems(profile.id);
-    } catch (syncError) {
-      console.error(
-        `Login sync warning for user ${profile.id}:`,
-        syncError.details || syncError.message,
-      );
-    }
+    // Run sync/categorization asynchronously so login returns fast while preserving
+    // the same post-login sync behavior.
+    setImmediate(async () => {
+      try {
+        await plaidSyncService.syncAllUserItems(profile.id);
+      } catch (syncError) {
+        console.error(
+          `Login background sync warning for user ${profile.id}:`,
+          syncError.details || syncError.message,
+        );
+      }
 
-    try {
-      categorization = await transactionCategorizationService.categorizeTransactions({
-        userId: profile.id,
-        onlyUncategorized: true,
-      });
-    } catch (categorizationError) {
-      console.error(
-        `Login categorization warning for user ${profile.id}:`,
-        categorizationError.details || categorizationError.message,
-      );
-    }
+      try {
+        await transactionCategorizationService.categorizeTransactions({
+          userId: profile.id,
+          onlyUncategorized: true,
+        });
+      } catch (categorizationError) {
+        console.error(
+          `Login background categorization warning for user ${profile.id}:`,
+          categorizationError.details || categorizationError.message,
+        );
+      }
+    });
 
     return res.json({
       user: sanitizeProfile(profile),
