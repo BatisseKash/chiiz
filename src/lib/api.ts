@@ -8,6 +8,9 @@ import type {
   UnifiedMonthlyCategoryAmount,
   LinkedAccount,
   LinkedPlaidItem,
+  NetWorthAccount,
+  NetWorthSnapshot,
+  NetWorthSummary,
   PlaidDebug,
   PlaidTransactionsResponse,
   SyncSummary,
@@ -190,6 +193,54 @@ export const fetchLinkedAccounts = () =>
   request<{ items: LinkedPlaidItem[]; total_items: number; total_accounts: number }>(
     '/api/linked_accounts',
   );
+export const fetchNetWorthSummary = () =>
+  request<NetWorthSummary>('/api/net-worth/summary');
+export const fetchNetWorthAccounts = () =>
+  request<{ accounts: NetWorthAccount[] }>('/api/net-worth/accounts');
+export const fetchNetWorthHistory = () =>
+  request<{ snapshots: NetWorthSnapshot[] }>('/api/net-worth/history');
+export const addNetWorthHistorySnapshots = (payload: {
+  rows: Array<{
+    snapshotDate: string;
+    totalAssets: number;
+    totalLiabilities?: number | null;
+    changeAmount?: number | null;
+  }>;
+}) =>
+  request<{ snapshots: NetWorthSnapshot[]; inserted_count: number }>('/api/net-worth/history', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+export const createManualNetWorthAccount = (payload: {
+  name: string;
+  institutionName?: string | null;
+  type: 'asset' | 'liability';
+  subtype?: string | null;
+  balance: number;
+  balanceDate?: string;
+}) =>
+  request<{ account: NetWorthAccount }>('/api/net-worth/manual-accounts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+export const updateManualNetWorthAccount = (
+  accountId: string,
+  payload: {
+    name: string;
+    institutionName?: string | null;
+    type: 'asset' | 'liability';
+    subtype?: string | null;
+    balance?: number | null;
+    balanceDate?: string;
+  },
+) =>
+  request<{ account: NetWorthAccount }>(`/api/net-worth/manual-accounts/${accountId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 export const loginUser = (payload: { email: string; password: string }) =>
   request<{ user: AuthUser; sync: SyncSummary }>('/api/auth/login', {
     method: 'POST',

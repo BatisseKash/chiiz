@@ -1,4 +1,4 @@
-export type View = 'dashboard' | 'categories' | 'transactions' | 'performance' | 'settings' | 'upload';
+export type View = 'dashboard' | 'categories' | 'transactions' | 'performance' | 'net-worth' | 'settings' | 'upload';
 
 export type AuthUser = {
   id: string;
@@ -105,11 +105,56 @@ export type PlaidTransactionsResponse = {
 
 export type LinkedAccount = {
   id: string;
-  plaid_account_id: string;
+  plaid_item_id?: string | null;
+  plaid_account_id: string | null;
   account_name: string | null;
   account_type: string | null;
+  plaid_type?: string | null;
+  account_subtype?: string | null;
+  net_worth_type?: 'asset' | 'liability' | null;
+  current_balance?: number | null;
   institution_name?: string | null;
+  mask?: string | null;
+  last_synced_at?: string | null;
+  is_manual?: boolean;
   created_at: string;
+};
+
+export type NetWorthSummary = {
+  net_worth: number;
+  total_assets: number;
+  total_liabilities: number;
+  checking_savings: number;
+  investments: number;
+  account_count: number;
+  snapshot_date: string;
+  has_balances: boolean;
+};
+
+export type NetWorthAccount = {
+  id: string;
+  source: 'plaid' | 'manual';
+  plaid_account_id: string | null;
+  name: string | null;
+  balance: number | null;
+  type: 'asset' | 'liability' | null;
+  plaid_type: string | null;
+  subtype: string | null;
+  institution_name: string | null;
+  mask: string | null;
+  last_synced_at: string | null;
+  balance_date?: string | null;
+};
+
+export type NetWorthSnapshot = {
+  id: string;
+  snapshot_date: string;
+  total_assets: number;
+  total_liabilities: number;
+  net_worth: number;
+  change_amount?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export type LinkedPlaidItem = {

@@ -1,4 +1,4 @@
-import { BarChart3, LayoutDashboard, Link2, ReceiptText, Shapes, Upload } from 'lucide-react';
+import { BarChart3, LayoutDashboard, Link2, ReceiptText, Shapes, TrendingUp, Upload } from 'lucide-react';
 import type { View } from '../types';
 
 type SidebarProps = {
@@ -7,11 +7,12 @@ type SidebarProps = {
   needsReviewCount?: number;
 };
 
-const navItems: Array<{ id: View; label: string; icon: typeof LayoutDashboard }> = [
+const navItems: Array<{ id: View; label: string; icon: typeof LayoutDashboard; badge?: string }> = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'categories', label: 'Budget', icon: Shapes },
   { id: 'transactions', label: 'Transactions', icon: ReceiptText },
   { id: 'performance', label: 'Performance', icon: BarChart3 },
+  { id: 'net-worth', label: 'Net Worth', icon: TrendingUp },
 ];
 const logoUrl = new URL('../../Chiiz logo.png', import.meta.url).href;
 
@@ -60,6 +61,10 @@ export function Sidebar({ activeView, onSelect, needsReviewCount = 0 }: SidebarP
                 {item.id === 'transactions' && needsReviewCount > 0 ? (
                   <span className="ml-auto inline-flex min-w-[22px] items-center justify-center rounded-full bg-[#f59e0b] px-1.5 py-0.5 text-xs font-semibold leading-none text-white">
                     {needsReviewCount}
+                  </span>
+                ) : item.badge ? (
+                  <span className="ml-auto inline-flex items-center rounded-full bg-[var(--color-accent)] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                    {item.badge}
                   </span>
                 ) : null}
               </button>

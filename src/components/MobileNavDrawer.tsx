@@ -5,6 +5,7 @@ import {
   Link2,
   LogOut,
   Shapes,
+  TrendingUp,
   Upload,
   X,
   ReceiptText,
@@ -21,11 +22,12 @@ type MobileNavDrawerProps = {
 
 const logoUrl = new URL('../../Chiiz logo.png', import.meta.url).href;
 
-const mainNavItems: Array<{ id: View; label: string; icon: typeof LayoutDashboard }> = [
+const mainNavItems: Array<{ id: View; label: string; icon: typeof LayoutDashboard; badge?: string }> = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'categories', label: 'Budget', icon: Shapes },
   { id: 'transactions', label: 'Transactions', icon: ReceiptText },
   { id: 'performance', label: 'Performance', icon: BarChart3 },
+  { id: 'net-worth', label: 'Net Worth', icon: TrendingUp },
 ];
 
 const accountNavItems: Array<{ id: View; label: string; icon: typeof LayoutDashboard }> = [
@@ -68,7 +70,7 @@ export function MobileNavDrawer({
     return null;
   }
 
-  const renderNavButton = (item: { id: View; label: string; icon: typeof LayoutDashboard }) => {
+  const renderNavButton = (item: { id: View; label: string; icon: typeof LayoutDashboard; badge?: string }) => {
     const Icon = item.icon;
     const isActive = activeView === item.id;
     return (
@@ -90,6 +92,11 @@ export function MobileNavDrawer({
           strokeWidth={1.7}
         />
         <span className={isActive ? 'font-semibold' : ''}>{item.label}</span>
+        {item.badge ? (
+          <span className="ml-auto inline-flex items-center rounded-full bg-[var(--color-accent)] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+            {item.badge}
+          </span>
+        ) : null}
       </button>
     );
   };

@@ -83,6 +83,31 @@ function createPlaidSyncService({
     return mask ? `${label} ••••${mask}` : label;
   }
 
+  function netWorthTypeForPlaidAccount(account) {
+    const plaidType = String(account.type || '').trim().toLowerCase();
+    if (['depository', 'investment', 'brokerage', 'real estate', 'real_estate'].includes(plaidType)) {
+      return 'asset';
+    }
+    if (['credit', 'loan'].includes(plaidType)) {
+      return 'liability';
+    }
+    return null;
+  }
+
+  function accountBalanceValue(account) {
+    const current = account.balances?.current;
+    if (current !== null && current !== undefined) {
+      return Number(current);
+    }
+
+    const available = account.balances?.available;
+    if (available !== null && available !== undefined) {
+      return Number(available);
+    }
+
+    return null;
+  }
+
   function serializeSyncError(error) {
     const plaidError = error.response?.data;
 
@@ -129,6 +154,13 @@ function createPlaidSyncService({
         plaid_account_id: account.account_id,
         account_name: accountDisplayName(account),
         account_type: [account.type, account.subtype].filter(Boolean).join(':') || account.type || 'other',
+        plaid_type: account.type || null,
+        account_subtype: account.subtype || null,
+        net_worth_type: netWorthTypeForPlaidAccount(account),
+        current_balance: accountBalanceValue(account),
+        institution_name: plaidItem.institution_name || null,
+        mask: account.mask || null,
+        last_synced_at: new Date().toISOString(),
       }));
 
     const plaidAccountIds = accountPayload.map((account) => account.plaid_account_id);
@@ -170,6 +202,13 @@ function createPlaidSyncService({
                 plaid_item_id: account.plaid_item_id,
                 account_name: account.account_name,
                 account_type: account.account_type,
+                plaid_type: account.plaid_type,
+                account_subtype: account.account_subtype,
+                net_worth_type: account.net_worth_type,
+                current_balance: account.current_balance,
+                institution_name: account.institution_name,
+                mask: account.mask,
+                last_synced_at: account.last_synced_at,
               }),
             },
           );
@@ -184,7 +223,8 @@ function createPlaidSyncService({
     }
 
     const accountParams = new URLSearchParams({
-      select: 'id,plaid_account_id,account_name,account_type,plaid_item_id',
+      select:
+        'id,plaid_account_id,account_name,account_type,plaid_type,account_subtype,net_worth_type,current_balance,institution_name,mask,last_synced_at,plaid_item_id',
       user_id: `eq.${userId}`,
     });
     if (plaidAccountIds.length) {

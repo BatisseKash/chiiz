@@ -7,6 +7,7 @@ const titles: Record<View, string> = {
   categories:   'Categories',
   transactions: 'Transactions',
   performance:  'Performance',
+  'net-worth':  'Net Worth',
   settings:     'Settings',
   upload:       'Upload Data',
 };

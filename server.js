@@ -941,7 +941,8 @@ async function fetchProfileById(userId) {
 async function fetchLinkedAccountsForUser(userId) {
   const items = await plaidSyncService.fetchPlaidItemsForUser(userId);
   const accountParams = new URLSearchParams({
-    select: 'id,plaid_item_id,plaid_account_id,account_name,account_type,created_at',
+    select:
+      'id,plaid_item_id,plaid_account_id,account_name,account_type,plaid_type,account_subtype,net_worth_type,current_balance,institution_name,mask,last_synced_at,created_at',
     user_id: `eq.${userId}`,
     order: 'created_at.asc',
   });
@@ -991,6 +992,206 @@ function formatStoredTransaction(row) {
     ignored_from_budget: Boolean(row.ignored_from_budget),
     iso_currency_code: 'USD',
     counterparties: [],
+  };
+}
+
+function normalizeNetWorthType(account) {
+  const explicit = String(account.net_worth_type || '').trim().toLowerCase();
+  if (explicit === 'asset' || explicit === 'liability') {
+    return explicit;
+  }
+
+  const plaidType = String(account.plaid_type || account.account_type || '')
+    .split(':')[0]
+    .trim()
+    .toLowerCase();
+  if (['depository', 'investment', 'brokerage', 'real estate', 'real_estate'].includes(plaidType)) {
+    return 'asset';
+  }
+  if (['credit', 'loan'].includes(plaidType)) {
+    return 'liability';
+  }
+  return null;
+}
+
+function currentSnapshotDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeSnapshotDate(dateValue) {
+  const value = String(dateValue || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : currentSnapshotDate();
+}
+
+function formatNetWorthAccount(row) {
+  const type = normalizeNetWorthType(row);
+  const balance =
+    row.current_balance === null || row.current_balance === undefined
+      ? null
+      : Number(row.current_balance);
+  const plaidType = String(row.plaid_type || row.account_type || '').split(':')[0] || null;
+  const isManual =
+    row.is_manual === true ||
+    row.plaid_account_id === null ||
+    String(row.plaid_type || '').toLowerCase() === 'manual';
+  const subtype =
+    row.account_subtype ||
+    (String(row.account_type || '').includes(':') ? String(row.account_type).split(':').slice(1).join(':') : null);
+
+  return {
+    id: row.id,
+    source: isManual ? 'manual' : 'plaid',
+    plaid_account_id: row.plaid_account_id,
+    name: row.account_name,
+    balance,
+    type,
+    plaid_type: plaidType,
+    subtype,
+    institution_name: row.institution_name || row.item?.institution_name || null,
+    mask: row.mask || null,
+    last_synced_at: row.last_synced_at || null,
+    balance_date: row.last_synced_at ? String(row.last_synced_at).slice(0, 10) : null,
+  };
+}
+
+async function fetchNetWorthAccountsForUser(userId) {
+  const params = new URLSearchParams({
+    select:
+      'id,plaid_account_id,account_name,account_type,plaid_type,account_subtype,net_worth_type,current_balance,institution_name,mask,last_synced_at',
+    user_id: `eq.${userId}`,
+    order: 'institution_name.asc,account_name.asc',
+  });
+
+  const rows = await supabaseRequest(`/rest/v1/accounts?${params.toString()}`, {
+    method: 'GET',
+  });
+
+  return rows
+    .map(formatNetWorthAccount)
+    .filter((account) => account.type && account.balance !== null);
+}
+
+function calculateNetWorthSummary(accounts) {
+  let totalAssets = 0;
+  let totalLiabilities = 0;
+  let checkingSavings = 0;
+  let investments = 0;
+
+  for (const account of accounts) {
+    const balance = Math.abs(Number(account.balance || 0));
+    if (account.type === 'asset') {
+      totalAssets += balance;
+      const plaidType = String(account.plaid_type || '').toLowerCase();
+      const subtype = String(account.subtype || '').toLowerCase();
+      if (plaidType === 'depository' && ['checking', 'savings'].includes(subtype)) {
+        checkingSavings += balance;
+      }
+      if (['investment', 'brokerage'].includes(plaidType)) {
+        investments += balance;
+      }
+    } else if (account.type === 'liability') {
+      totalLiabilities += balance;
+    }
+  }
+
+  return {
+    net_worth: totalAssets - totalLiabilities,
+    total_assets: totalAssets,
+    total_liabilities: totalLiabilities,
+    checking_savings: checkingSavings,
+    investments,
+    account_count: accounts.length,
+  };
+}
+
+function normalizeManualNetWorthPayload(body = {}, { requireBalance = false } = {}) {
+  const name = String(body.name || body.accountName || '').trim().replace(/\s+/g, ' ');
+  const institutionName = String(body.institutionName || body.institution_name || '').trim().replace(/\s+/g, ' ');
+  const rawType = String(body.type || body.netWorthType || body.net_worth_type || '').trim().toLowerCase();
+  const netWorthType = rawType === 'asset' || rawType === 'liability' ? rawType : null;
+  const subtype = String(body.subtype || body.accountSubtype || body.account_subtype || '').trim().replace(/\s+/g, ' ');
+  const hasBalance = body.balance !== null && body.balance !== undefined && String(body.balance).trim() !== '';
+  const balance = hasBalance ? Number(body.balance) : null;
+  const balanceDateRaw = String(body.balanceDate || body.balance_date || '').trim();
+  const balanceDate = normalizeSnapshotDate(balanceDateRaw);
+
+  if (!name) {
+    const error = new Error('Account name is required.');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!netWorthType) {
+    const error = new Error('Account type must be asset or liability.');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (requireBalance && !hasBalance) {
+    const error = new Error('Balance is required.');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (hasBalance && !Number.isFinite(balance)) {
+    const error = new Error('Balance must be a valid number.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    name,
+    institutionName: institutionName || null,
+    netWorthType,
+    subtype: subtype || null,
+    hasBalance,
+    balance,
+    balanceDate,
+  };
+}
+
+async function fetchManualNetWorthAccountById(userId, accountId) {
+  const accountParams = new URLSearchParams({
+    select:
+      'id,plaid_account_id,account_name,account_type,plaid_type,account_subtype,net_worth_type,current_balance,institution_name,mask,last_synced_at',
+    user_id: `eq.${userId}`,
+    id: `eq.${accountId}`,
+    limit: '1',
+  });
+  const accounts = await supabaseRequest(
+    `/rest/v1/accounts?${accountParams.toString()}`,
+    { method: 'GET' },
+  );
+  const account = accounts?.[0] || null;
+  if (!account) {
+    return null;
+  }
+
+  const formattedAccount = formatNetWorthAccount(account);
+  return formattedAccount.source === 'manual' ? formattedAccount : null;
+}
+
+async function recordNetWorthSnapshotForUser(userId, snapshotDateValue) {
+  const accounts = await fetchNetWorthAccountsForUser(userId);
+  const summary = calculateNetWorthSummary(accounts);
+  const snapshotDate = normalizeSnapshotDate(snapshotDateValue);
+
+  await supabaseRequest('/rest/v1/net_worth_snapshots', {
+    method: 'POST',
+    headers: {
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify([
+      {
+        user_id: userId,
+        snapshot_date: snapshotDate,
+        total_assets: summary.total_assets,
+        total_liabilities: summary.total_liabilities,
+        net_worth: summary.net_worth,
+      },
+    ]),
+  });
+
+  return {
+    ...summary,
+    snapshot_date: snapshotDate,
   };
 }
 
@@ -2072,6 +2273,7 @@ app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
     setImmediate(async () => {
       try {
         await plaidSyncService.syncAllUserItems(profile.id);
+        await recordNetWorthSnapshotForUser(profile.id);
       } catch (syncError) {
         console.error(
           `Login background sync warning for user ${profile.id}:`,
@@ -3038,6 +3240,7 @@ app.post('/api/exchange_token', requireAuth, async (req, res) => {
       userId: req.userId,
       plaidItem,
     });
+    await recordNetWorthSnapshotForUser(req.userId);
     const categorization = await transactionCategorizationService.categorizeTransactions({
       userId: req.userId,
       onlyUncategorized: true,
@@ -3060,6 +3263,7 @@ app.post('/api/exchange_token', requireAuth, async (req, res) => {
 async function handleSyncRequest(req, res) {
   try {
     const sync = await plaidSyncService.syncAllUserItems(req.userId);
+    await recordNetWorthSnapshotForUser(req.userId);
     const categorization = await transactionCategorizationService.categorizeTransactions({
       userId: req.userId,
       onlyUncategorized: true,
@@ -3101,7 +3305,8 @@ app.get('/api/linked_accounts', requireAuth, async (req, res) => {
 app.get('/api/accounts', requireAuth, async (req, res) => {
   try {
     const params = new URLSearchParams({
-      select: 'id,plaid_item_id,plaid_account_id,account_name,account_type,created_at',
+      select:
+        'id,plaid_item_id,plaid_account_id,account_name,account_type,plaid_type,account_subtype,net_worth_type,current_balance,institution_name,mask,last_synced_at,created_at',
       user_id: `eq.${req.userId}`,
       order: 'created_at.asc',
     });
@@ -3111,20 +3316,276 @@ app.get('/api/accounts', requireAuth, async (req, res) => {
     });
 
     return res.json({
-      accounts: accounts.map((account) => ({
-        id: account.id,
-        plaid_item_id: account.plaid_item_id,
-        plaid_account_id: account.plaid_account_id,
-        account_name: account.account_name,
-        account_type: account.account_type,
-        institution_name: null,
-        created_at: account.created_at,
-      })),
+      accounts: accounts
+        .filter((account) => account.plaid_account_id !== null)
+        .map((account) => ({
+          id: account.id,
+          plaid_item_id: account.plaid_item_id,
+          plaid_account_id: account.plaid_account_id,
+          account_name: account.account_name,
+          account_type: account.account_type,
+          plaid_type: account.plaid_type || null,
+          account_subtype: account.account_subtype || null,
+          net_worth_type: account.net_worth_type || null,
+          current_balance:
+            account.current_balance === null || account.current_balance === undefined
+              ? null
+              : Number(account.current_balance),
+          institution_name: account.institution_name || null,
+          mask: account.mask || null,
+          last_synced_at: account.last_synced_at || null,
+          is_manual: false,
+          created_at: account.created_at,
+        })),
     });
   } catch (error) {
     console.error('Accounts error:', error.message);
     return res.status(500).json({
       error: 'Failed to fetch accounts',
+    });
+  }
+});
+
+app.get(['/api/net-worth/summary', '/net-worth/summary'], requireAuth, async (req, res) => {
+  try {
+    const accounts = await fetchNetWorthAccountsForUser(req.userId);
+    const summary = calculateNetWorthSummary(accounts);
+    return res.json({
+      ...summary,
+      snapshot_date: currentSnapshotDate(),
+      has_balances: accounts.length > 0,
+    });
+  } catch (error) {
+    console.error('Net worth summary failed:', error.details || error.message);
+    return res.status(error.statusCode || 500).json({
+      error: 'Failed to fetch net worth summary.',
+    });
+  }
+});
+
+app.get(['/api/net-worth/accounts', '/net-worth/accounts'], requireAuth, async (req, res) => {
+  try {
+    const accounts = await fetchNetWorthAccountsForUser(req.userId);
+    return res.json({ accounts });
+  } catch (error) {
+    console.error('Net worth accounts failed:', error.details || error.message);
+    return res.status(error.statusCode || 500).json({
+      error: 'Failed to fetch net worth accounts.',
+    });
+  }
+});
+
+app.post(['/api/net-worth/manual-accounts', '/net-worth/manual-accounts'], requireAuth, async (req, res) => {
+  try {
+    const payload = normalizeManualNetWorthPayload(req.body, { requireBalance: true });
+    const inserted = await supabaseRequest('/rest/v1/accounts', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify([
+        {
+          user_id: req.userId,
+          plaid_item_id: null,
+          plaid_account_id: null,
+          account_name: payload.name,
+          account_type: payload.subtype || 'manual',
+          plaid_type: 'manual',
+          institution_name: payload.institutionName,
+          net_worth_type: payload.netWorthType,
+          account_subtype: payload.subtype,
+          current_balance: Math.abs(payload.balance),
+          mask: null,
+          last_synced_at: `${payload.balanceDate}T00:00:00.000Z`,
+          is_manual: true,
+        },
+      ]),
+    });
+    const account = inserted?.[0] || null;
+    if (!account) {
+      throw new Error('Failed to create manual account.');
+    }
+    await recordNetWorthSnapshotForUser(req.userId, payload.balanceDate);
+
+    const formattedAccount = await fetchManualNetWorthAccountById(req.userId, account.id);
+    return res.status(201).json({ account: formattedAccount });
+  } catch (error) {
+    console.error('Manual net worth account creation failed:', error.details || error.message);
+    return res.status(error.statusCode || 500).json({
+      error: error.message || 'Failed to create manual account.',
+    });
+  }
+});
+
+app.patch(['/api/net-worth/manual-accounts/:accountId', '/net-worth/manual-accounts/:accountId'], requireAuth, async (req, res) => {
+  try {
+    const accountId = String(req.params.accountId || '').trim();
+    if (!accountId) {
+      return res.status(400).json({ error: 'Manual account id is required.' });
+    }
+
+    const existing = await fetchManualNetWorthAccountById(req.userId, accountId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Manual account not found.' });
+    }
+
+    const payload = normalizeManualNetWorthPayload(req.body, { requireBalance: false });
+    await supabaseRequest(
+      `/rest/v1/accounts?${new URLSearchParams({
+        id: `eq.${accountId}`,
+        user_id: `eq.${req.userId}`,
+      }).toString()}`,
+      {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          account_name: payload.name,
+          account_type: payload.subtype || 'manual',
+          plaid_type: 'manual',
+          institution_name: payload.institutionName,
+          net_worth_type: payload.netWorthType,
+          account_subtype: payload.subtype,
+          current_balance: payload.hasBalance ? Math.abs(payload.balance) : existing.balance,
+          last_synced_at: `${payload.balanceDate}T00:00:00.000Z`,
+        }),
+      },
+    );
+
+    await recordNetWorthSnapshotForUser(req.userId, payload.balanceDate);
+    const formattedAccount = await fetchManualNetWorthAccountById(req.userId, accountId);
+    return res.json({ account: formattedAccount });
+  } catch (error) {
+    console.error('Manual net worth account update failed:', error.details || error.message);
+    return res.status(error.statusCode || 500).json({
+      error: error.message || 'Failed to update manual account.',
+    });
+  }
+});
+
+app.get(['/api/net-worth/history', '/net-worth/history'], requireAuth, async (req, res) => {
+  try {
+    const params = new URLSearchParams({
+      select: 'id,snapshot_date,total_assets,total_liabilities,net_worth,change_amount,created_at,updated_at',
+      user_id: `eq.${req.userId}`,
+      order: 'snapshot_date.desc,created_at.desc',
+      limit: '500',
+    });
+    const rows = await supabaseRequest(`/rest/v1/net_worth_snapshots?${params.toString()}`, {
+      method: 'GET',
+    });
+    const latestByMonth = new Map();
+    for (const row of rows) {
+      const monthKey = String(row.snapshot_date || '').slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(monthKey) || latestByMonth.has(monthKey)) {
+        continue;
+      }
+      latestByMonth.set(monthKey, row);
+      if (latestByMonth.size >= 12) {
+        break;
+      }
+    }
+
+    return res.json({
+      snapshots: [...latestByMonth.values()]
+        .map((row) => ({
+          id: row.id,
+          snapshot_date: row.snapshot_date,
+          total_assets: Number(row.total_assets || 0),
+          total_liabilities: Number(row.total_liabilities || 0),
+          net_worth: Number(row.net_worth || 0),
+          change_amount:
+            row.change_amount === null || row.change_amount === undefined
+              ? null
+              : Number(row.change_amount || 0),
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+        }))
+        .reverse(),
+    });
+  } catch (error) {
+    console.error('Net worth history failed:', error.details || error.message);
+    return res.status(error.statusCode || 500).json({
+      error: 'Failed to fetch net worth history.',
+    });
+  }
+});
+
+app.post(['/api/net-worth/history', '/net-worth/history'], requireAuth, async (req, res) => {
+  try {
+    const rawRows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rawRows.length) {
+      return res.status(400).json({ error: 'At least one history row is required.' });
+    }
+
+    const rows = rawRows.map((row, index) => {
+      const snapshotDate = String(row.snapshotDate || row.snapshot_date || '').trim();
+      const totalAssets = Number(row.totalAssets ?? row.total_assets);
+      const totalLiabilitiesRaw = row.totalLiabilities ?? row.total_liabilities ?? 0;
+      const totalLiabilities = Number(totalLiabilitiesRaw || 0);
+      const changeValue = row.changeAmount ?? row.change_amount;
+      const hasChange =
+        changeValue !== null &&
+        changeValue !== undefined &&
+        String(changeValue).trim() !== '';
+      const changeAmount = hasChange ? Number(changeValue) : null;
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshotDate)) {
+        const error = new Error(`Row ${index + 1}: date must be YYYY-MM-DD.`);
+        error.statusCode = 400;
+        throw error;
+      }
+      if (!Number.isFinite(totalAssets)) {
+        const error = new Error(`Row ${index + 1}: assets must be a valid number.`);
+        error.statusCode = 400;
+        throw error;
+      }
+      if (!Number.isFinite(totalLiabilities)) {
+        const error = new Error(`Row ${index + 1}: liabilities must be a valid number.`);
+        error.statusCode = 400;
+        throw error;
+      }
+      if (hasChange && !Number.isFinite(changeAmount)) {
+        const error = new Error(`Row ${index + 1}: change must be a valid number.`);
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const assets = Math.abs(totalAssets);
+      const liabilities = Math.abs(totalLiabilities);
+      return {
+        user_id: req.userId,
+        snapshot_date: snapshotDate,
+        total_assets: assets,
+        total_liabilities: liabilities,
+        net_worth: assets - liabilities,
+        change_amount: changeAmount,
+      };
+    });
+
+    const inserted = await supabaseRequest('/rest/v1/net_worth_snapshots', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify(rows),
+    });
+
+    return res.status(201).json({
+      inserted_count: inserted.length,
+      snapshots: inserted.map((row) => ({
+        id: row.id,
+        snapshot_date: row.snapshot_date,
+        total_assets: Number(row.total_assets || 0),
+        total_liabilities: Number(row.total_liabilities || 0),
+        net_worth: Number(row.net_worth || 0),
+        change_amount:
+          row.change_amount === null || row.change_amount === undefined
+            ? null
+            : Number(row.change_amount || 0),
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      })),
+    });
+  } catch (error) {
+    console.error('Manual net worth history insert failed:', error.details || error.message);
+    return res.status(error.statusCode || 500).json({
+      error: error.message || 'Failed to add net worth history.',
     });
   }
 });

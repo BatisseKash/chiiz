@@ -61,6 +61,7 @@ import type {
 import { AuthView } from './views/AuthView';
 import { CategoriesView } from './views/CategoriesView';
 import { DashboardView } from './views/DashboardView';
+import { NetWorthView } from './views/NetWorthView';
 import { PerformanceView } from './views/PerformanceView';
 import { SettingsView } from './views/SettingsView';
 import { TransactionsView } from './views/TransactionsView';
@@ -1429,6 +1430,10 @@ function App() {
           onNeedsReviewCountChange={setTransactionsNeedsReviewCount}
         />
       );
+    }
+
+    if (activeView === 'net-worth') {
+      return <NetWorthView onOpenLinkedAccounts={() => setActiveView('settings')} />;
     }
 
     if (activeView === 'upload') {
