@@ -515,7 +515,8 @@ async function fetchHistoricalUploadMonths(userId) {
 async function fetchUnifiedMonthlyCategoryAmountsForUser(userId) {
   const transactionRows = await supabaseRequest(
     `/rest/v1/transactions?${new URLSearchParams({
-      select: 'date,amount,category_id,ignored_from_budget,category:categories(id,category_name,category_type)',
+      select:
+        'date,amount,category_id,categorization_source,ignored_from_budget,category:categories(id,category_name,category_type)',
       user_id: `eq.${userId}`,
       category_id: 'not.is.null',
       order: 'date.asc',
@@ -526,7 +527,7 @@ async function fetchUnifiedMonthlyCategoryAmountsForUser(userId) {
 
   const transactionAggregated = new Map();
   for (const row of transactionRows) {
-    if (row.ignored_from_budget || !row.category?.id) {
+    if (row.ignored_from_budget || !row.category?.id || !isConfirmedStoredTransaction(row)) {
       continue;
     }
     const monthKey = String(row.date || '').slice(0, 7);
@@ -1055,6 +1056,49 @@ function monthRangeFromKey(monthKey) {
     endIso: end.toISOString().slice(0, 10),
     label: new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(start),
   };
+}
+
+function postgrestInList(values) {
+  return `in.(${values.map((value) => `"${String(value).replace(/"/g, '\\"')}"`).join(',')})`;
+}
+
+function chunkRows(rows, size) {
+  const chunks = [];
+  for (let index = 0; index < rows.length; index += size) {
+    chunks.push(rows.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function isConfirmedStoredTransaction(transaction) {
+  const source = String(transaction.categorization_source || '').toLowerCase();
+  return Boolean(transaction.ignored_from_budget) || source === 'user';
+}
+
+function transactionMatchesSearch(transaction, query) {
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const categoryName = transaction.ignored_from_budget
+    ? 'Transfers / Ignore'
+    : transaction.category_name || 'Needs Review';
+  const haystack = [
+    transaction.name,
+    transaction.transaction_name,
+    transaction.merchant_name,
+    transaction.institution_name,
+    transaction.account_name,
+    transaction.account_type,
+    transaction.date,
+    categoryName,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return haystack.includes(normalizedQuery);
 }
 
 function extractTextOutput(response) {
@@ -3281,6 +3325,102 @@ app.patch('/api/transactions/:transactionId/category', requireAuth, async (req, 
     console.error('Transaction category override failed:', error.details || error.message);
     return res.status(error.statusCode || 500).json({
       error: error.message || 'Failed to update transaction category.',
+    });
+  }
+});
+
+app.post('/api/transactions/confirm_all', requireAuth, async (req, res) => {
+  try {
+    const ignoreCategoryFilterValue = '__ignore__';
+    const monthKey = /^\d{4}-\d{2}$/.test(String(req.body?.monthKey || ''))
+      ? String(req.body.monthKey)
+      : null;
+    const monthRange = monthKey ? monthRangeFromKey(monthKey) : null;
+    if (!monthRange) {
+      return res.status(400).json({
+        error: 'Select a valid month before confirming transactions.',
+      });
+    }
+
+    const categoryTypeFilterRaw = String(req.body?.categoryType || '').trim().toLowerCase();
+    const categoryTypeFilter =
+      categoryTypeFilterRaw === 'income' || categoryTypeFilterRaw === 'expense'
+        ? categoryTypeFilterRaw
+        : null;
+    const categoryIdFilterRaw = String(req.body?.categoryId || '').trim();
+    const categoryIdFilter =
+      categoryIdFilterRaw && categoryIdFilterRaw !== 'all' ? categoryIdFilterRaw : null;
+    const searchQuery = String(req.body?.searchQuery || '').trim();
+
+    const params = new URLSearchParams({
+      select:
+        'id,plaid_transaction_id,merchant_name,transaction_name,date,amount,created_at,institution_name,location_city,location_region,categorization_source,categorization_confidence,categorization_reason,categorized_at,ignored_from_budget,account:accounts(account_name,account_type,plaid_account_id),category:categories(id,category_name,category_type)',
+      user_id: `eq.${req.userId}`,
+      order: 'date.desc,created_at.desc',
+      and: `(date.gte.${monthRange.startIso},date.lt.${monthRange.endIso})`,
+    });
+
+    const rows = await supabaseRequest(`/rest/v1/transactions?${params.toString()}`, {
+      method: 'GET',
+    });
+    const typeFilteredRows = categoryTypeFilter
+      ? rows.filter((row) => {
+          if (Boolean(row.ignored_from_budget)) {
+            return true;
+          }
+          const explicitType = String(row.category?.category_type || '').toLowerCase();
+          if (explicitType === 'income' || explicitType === 'expense') {
+            return explicitType === categoryTypeFilter;
+          }
+          const amountValue = Number(row.amount || 0);
+          const inferredType = amountValue < 0 ? 'income' : 'expense';
+          return inferredType === categoryTypeFilter;
+        })
+      : rows;
+    const formattedRows = typeFilteredRows.map(formatStoredTransaction);
+    const matchingRows = formattedRows
+      .filter((transaction) =>
+        categoryIdFilter
+          ? categoryIdFilter === ignoreCategoryFilterValue
+            ? Boolean(transaction.ignored_from_budget)
+            : transaction.category_id === categoryIdFilter
+          : true,
+      )
+      .filter((transaction) => !isConfirmedStoredTransaction(transaction))
+      .filter((transaction) => transactionMatchesSearch(transaction, searchQuery));
+    const confirmableRows = matchingRows.filter((transaction) => transaction.category_id);
+    const transactionIds = confirmableRows.map((transaction) => transaction.id);
+
+    for (const transactionIdChunk of chunkRows(transactionIds, 100)) {
+      await supabaseRequest(
+        `/rest/v1/transactions?${new URLSearchParams({
+          user_id: `eq.${req.userId}`,
+          id: postgrestInList(transactionIdChunk),
+        }).toString()}`,
+        {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            categorization_source: 'user',
+            categorization_confidence: 1,
+            categorization_reason: 'Bulk confirmed by the user.',
+            categorized_at: new Date().toISOString(),
+            ignored_from_budget: false,
+          }),
+        },
+      );
+    }
+
+    return res.json({
+      success: true,
+      confirmed_count: transactionIds.length,
+      skipped_uncategorized: matchingRows.length - confirmableRows.length,
+      transaction_ids: transactionIds,
+    });
+  } catch (error) {
+    console.error('Bulk transaction confirmation failed:', error.details || error.message);
+    return res.status(error.statusCode || 500).json({
+      error: error.message || 'Failed to confirm transactions.',
     });
   }
 });

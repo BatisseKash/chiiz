@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chiiz — UI Scaffolding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --color-bg:            #F7F6F2;
+    --color-surface:       #FFFFFF;
+    --color-surface-alt:   #EEECEA;
+    --color-accent:        #2DCC8F;
+    --color-accent-light:  #D4F5E9;
+    --color-accent-dark:   #1FA870;
+    --color-text-primary:  #1A1A2E;
+    --color-text-secondary:#6B6B80;
+    --color-text-muted:    #ADADBE;
+    --color-positive:      #2DCC8F;
+    --color-negative:      #F0635A;
+    --color-warning:       #F5A623;
+    --color-neutral:       #A0AEC0;
+    --color-border:        #E8E6E1;
+    --color-border-strong: #D0CEC9;
+    --shadow-xs:  0px 1px 3px rgba(26,26,46,0.05);
+    --shadow-sm:  0px 2px 8px rgba(26,26,46,0.07);
+    --shadow-md:  0px 6px 20px rgba(26,26,46,0.09);
+    --shadow-lg:  0px 16px 40px rgba(26,26,46,0.12);
+    --font-display: 'Sora', sans-serif;
+    --font-body:    'DM Sans', sans-serif;
+    --radius-sm:   6px;
+    --radius-md:   10px;
+    --radius-lg:   16px;
+    --radius-xl:   24px;
+    --radius-full: 9999px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-display);
+    background: #12121C;
+    color: #F0EFF8;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* ── TOC nav ───────────────────────────────────────── */
+  .toc {
+    position: fixed; top: 0; left: 0; width: 200px; height: 100vh;
+    background: #1C1C2A; border-right: 1px solid #2E2E42;
+    padding: 20px 12px; overflow-y: auto; z-index: 999;
+  }
+  .toc h3 { font-family: var(--font-display); font-size: 11px; font-weight: 700;
+    letter-spacing: .1em; text-transform: uppercase; color: #50506A; margin-bottom: 12px; }
+  .toc a { display: block; font-family: var(--font-body); font-size: 12px;
+    color: #9090A8; text-decoration: none; padding: 5px 8px; border-radius: 6px;
+    margin-bottom: 2px; transition: all .15s; }
+  .toc a:hover, .toc a.active { background: #252535; color: #F0EFF8; }
+
+  /* ── page wrapper ──────────────────────────────────── */
+  .page { margin-left: 200px; padding: 40px; display: flex; flex-direction: column; gap: 60px; }
+
+  /* ── section wrapper ───────────────────────────────── */
+  .section-block { display: flex; flex-direction: column; gap: 12px; }
+  .section-label {
+    font-family: var(--font-body); font-size: 10px; font-weight: 700;
+    letter-spacing: .12em; text-transform: uppercase; color: #50506A;
+    padding-bottom: 8px; border-bottom: 1px solid #2E2E42;
+  }
+  .section-title {
+    font-family: var(--font-display); font-size: 22px; font-weight: 700;
+    color: #F0EFF8; letter-spacing: -.02em;
+  }
+  .section-desc { font-family: var(--font-body); font-size: 12px; color: #9090A8; }
+
+  /* ── mock browser chrome ───────────────────────────── */
+  .browser {
+    background: #252535; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,.4); border: 1px solid #3A3A52;
+  }
+  .browser-bar {
+    background: #1C1C2A; padding: 10px 16px; display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid #2E2E42;
+  }
+  .browser-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .browser-dot.red   { background: #F0635A; }
+  .browser-dot.amber { background: #F5A623; }
+  .browser-dot.green { background: #2DCC8F; }
+  .browser-url {
+    margin-left: 10px; flex: 1; background: #252535; border-radius: 6px;
+    padding: 4px 10px; font-family: var(--font-body); font-size: 11px; color: #50506A;
+    border: 1px solid #2E2E42;
+  }
+  .browser-content { background: var(--color-bg); }
+
+  /* ═══════════════════════════════════════════════════
+     CHIIZ APP STYLES (light theme, mirroring index.css)
+     ═══════════════════════════════════════════════════ */
+
+  /* --- shared app chrome --- */
+  .app-shell {
+    display: grid;
+    grid-template-columns: 246px 1fr;
+    min-height: 560px;
+    background: var(--color-bg);
+    font-family: var(--font-body);
+    color: var(--color-text-primary);
+  }
+
+  /* --- sidebar --- */
+  .sidebar {
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    display: flex; flex-direction: column;
+  }
+  .sidebar-brand {
+    display: flex; align-items: center; gap: 10px;
+    padding: 20px 24px; border-bottom: 1px solid var(--color-border);
+  }
+  .sidebar-logo {
+    width: 36px; height: 36px; border-radius: 10px; background: var(--color-accent-light);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-size: 14px; font-weight: 700; color: var(--color-accent-dark);
+  }
+  .sidebar-brand-name { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; letter-spacing: -.03em; color: var(--color-text-primary); }
+  .sidebar-brand-sub  { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--color-text-muted); margin-top: -2px; }
+
+  .sidebar-body { padding: 20px 8px; flex: 1; }
+  .sidebar-section-label { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--color-text-muted); padding: 0 12px; margin-bottom: 4px; }
+  .sidebar-section-label + * { margin-top: 0; }
+  .sidebar-gap { margin-top: 24px; }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 10px; cursor: pointer;
+    font-size: 14px; font-weight: 500; color: var(--color-text-secondary);
+    transition: all .15s; border: none; background: none; width: 100%; text-align: left;
+  }
+  .nav-item:hover { background: var(--color-surface-alt); color: var(--color-text-primary); }
+  .nav-item.active { background: var(--color-accent-light); color: var(--color-accent-dark); font-weight: 600; }
+  .nav-icon { width: 16px; height: 16px; flex-shrink: 0; }
+  .nav-badge {
+    margin-left: auto; background: #f59e0b; color: #fff;
+    font-size: 11px; font-weight: 700; border-radius: 9999px;
+    padding: 1px 6px; min-width: 20px; text-align: center;
+  }
+
+  /* --- top nav --- */
+  .topnav {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    padding: 12px 24px;
+    display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-body); font-weight: 600; font-size: 13px;
+    border-radius: 9999px; padding: 8px 18px; cursor: pointer; border: none; transition: all .18s;
+  }
+  .btn-primary { background: var(--color-accent); color: #fff; }
+  .btn-primary:hover { background: var(--color-accent-dark); }
+  .btn-secondary { background: var(--color-surface-alt); color: var(--color-text-primary); border: 1px solid var(--color-border); }
+
+  .main-content { padding: 20px 24px; }
+
+  /* --- summary strip --- */
+  .kstrip {
+    border: 1px solid var(--color-border); border-radius: 14px;
+    background: var(--color-surface); overflow: hidden;
+    display: grid; grid-template-columns: repeat(4, 1fr);
+  }
+  .kstrip-cell { padding: 20px 24px; }
+  .kstrip-cell + .kstrip-cell { border-left: 1px solid var(--color-border); }
+  .kstrip-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--color-text-muted); }
+  .kstrip-value { font-family: var(--font-display); font-size: 2.4rem; font-weight: 700; letter-spacing: -.04em; margin-top: 4px; }
+  .kstrip-value.pos { color: var(--color-positive); }
+  .kstrip-value.neutral { color: var(--color-text-primary); }
+  .kstrip-sub { font-size: 13px; color: var(--color-text-secondary); margin-top: 2px; }
+
+  /* --- cards --- */
+  .card {
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: 14px; overflow: hidden;
+  }
+  .card-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--color-border);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+  }
+  .card-title { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; letter-spacing: -.02em; color: var(--color-text-primary); }
+  .card-sub   { font-size: 13px; color: var(--color-text-secondary); margin-top: 2px; }
+  .card-link  { font-size: 13px; font-weight: 600; color: var(--color-accent); text-decoration: none; white-space: nowrap; }
+  .card-body  { padding: 16px 20px; }
+  .card-footer { padding: 12px 20px; border-top: 1px solid var(--color-border); font-size: 13px; font-weight: 600; color: var(--color-accent); }
+
+  /* --- dashboard grid --- */
+  .dash-grid { display: grid; grid-template-columns: 1fr 320px; gap: 16px; margin-top: 16px; }
+  .dash-main { display: flex; flex-direction: column; gap: 16px; }
+  .dash-aside { display: flex; flex-direction: column; gap: 16px; }
+
+  /* --- pie legend --- */
+  .pie-section { display: grid; grid-template-columns: 180px 1fr; gap: 16px; padding: 16px 20px; align-items: center; }
+  .pie-placeholder {
+    width: 140px; height: 140px; border-radius: 50%;
+    background: conic-gradient(#2DCC8F 0% 38%, #667EEA 38% 62%, #F5A623 62% 79%, #F0635A 79% 91%, #63B3ED 91% 100%);
+    display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .pie-hole {
+    width: 76px; height: 76px; border-radius: 50%; background: var(--color-surface);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .pie-hole-val { font-family: var(--font-display); font-size: 13px; font-weight: 700; letter-spacing: -.03em; color: var(--color-text-primary); }
+  .pie-hole-lbl { font-size: 9px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--color-text-muted); }
+  .legend-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .legend-name { font-size: 13px; color: var(--color-text-primary); }
+  .legend-val  { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
+
+  /* --- transaction table --- */
+  .txn-table { width: 100%; border-collapse: collapse; }
+  .txn-table th { padding: 10px 20px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--color-text-muted); background: var(--color-surface-alt); border-bottom: 1px solid var(--color-border); }
+  .txn-table td { padding: 12px 20px; font-size: 13px; border-bottom: 1px solid var(--color-border); color: var(--color-text-secondary); }
+  .txn-table tr:hover td { background: var(--color-surface-alt); }
+  .txn-table tr:last-child td { border-bottom: none; }
+  .txn-name { font-weight: 600; color: var(--color-text-primary); }
+  .txn-amount { text-align: right; font-weight: 600; color: var(--color-text-primary); }
+  .txn-amount.credit { color: var(--color-positive); }
+  .badge {
+    display: inline-flex; align-items: center; border-radius: 9999px;
+    padding: 2px 8px; font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    background: var(--color-accent-light); color: var(--color-accent-dark);
+  }
+  .badge.warn { background: #FEF3C7; color: #92400E; }
+  .badge.neg  { background: #FEE2E2; color: #991B1B; }
+
+  /* --- top spending --- */
+  .rank-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--color-border); }
+  .rank-row:last-child { border-bottom: none; }
+  .rank-num { width: 20px; height: 20px; border-radius: 50%; background: var(--color-surface-alt); font-size: 11px; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; justify-content: center; }
+  .rank-name { font-size: 14px; font-weight: 600; color: var(--color-text-primary); margin-left: 8px; }
+  .rank-val  { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+
+  /* --- alert card --- */
+  .alert-item { background: var(--color-surface-alt); border-radius: 10px; padding: 12px; margin-bottom: 8px; }
+  .alert-item:last-child { margin-bottom: 0; }
+  .alert-header { display: flex; align-items: center; justify-content: space-between; }
+  .alert-icon { width: 20px; height: 20px; border-radius: 50%; background: var(--color-negative); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .alert-icon.warn { background: var(--color-warning); }
+  .alert-name { font-size: 14px; font-weight: 600; color: var(--color-text-primary); margin-left: 8px; }
+  .alert-amount { font-size: 14px; font-weight: 700; color: var(--color-negative); }
+  .alert-amount.warn { color: var(--color-warning); }
+  .alert-desc { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
+  .progress-track { height: 6px; border-radius: 9999px; background: var(--color-border); overflow: hidden; margin-top: 8px; }
+  .progress-fill { height: 100%; border-radius: 9999px; background: var(--color-negative); }
+  .progress-fill.warn { background: var(--color-warning); }
+  .ok-alert { background: var(--color-accent-light); border-radius: 10px; padding: 12px; }
+  .ok-alert-title { font-size: 13px; font-weight: 600; color: var(--color-accent-dark); }
+  .ok-alert-body  { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
+
+  /* --- filters bar --- */
+  .filters-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .filter-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; cursor: pointer;
+    border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary);
+    font-family: var(--font-body);
+  }
+  .filter-pill.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); font-weight: 600; }
+  .filter-select {
+    padding: 6px 12px; border-radius: 9999px; font-size: 13px; border: 1px solid var(--color-border);
+    background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; font-family: var(--font-body);
+  }
+
+  /* ─── AUTH VIEW ─────────────────────────────────────── */
+  .auth-bg { min-height: 520px; background: var(--color-bg); display: flex; align-items: center; justify-content: center; padding: 40px; font-family: var(--font-body); }
+  .auth-card { width: 100%; max-width: 440px; }
+  .auth-logo-row { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 28px; text-align: center; }
+  .auth-logo { width: 48px; height: 48px; border-radius: 10px; background: var(--color-accent-light); border: 1px solid var(--color-border); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--color-accent-dark); }
+  .auth-app-name { font-family: var(--font-display); font-size: 1.4rem; font-weight: 600; letter-spacing: -.01em; color: var(--color-text-primary); }
+  .auth-app-sub  { font-size: 13px; color: var(--color-text-secondary); }
+  .auth-panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 24px; padding: 32px; box-shadow: var(--shadow-md); }
+  .auth-tabs { display: flex; gap: 4px; background: var(--color-surface-alt); border: 1px solid var(--color-border); border-radius: 9999px; padding: 4px; margin-bottom: 24px; }
+  .auth-tab { flex: 1; text-align: center; padding: 8px; border-radius: 9999px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font-body); border: none; background: none; color: var(--color-text-secondary); }
+  .auth-tab.active { background: var(--color-accent); color: #fff; }
+  .auth-heading { font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; letter-spacing: -.01em; color: var(--color-text-primary); }
+  .auth-sub     { font-size: 13px; color: var(--color-text-secondary); margin-top: 6px; margin-bottom: 20px; }
+  .field-label  { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); display: block; margin-bottom: 6px; }
+  .input-wrap   { display: flex; align-items: center; gap: 10px; background: var(--color-surface-alt); border: 1.5px solid var(--color-border-strong); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
+  .input-wrap svg { flex-shrink: 0; }
+  .input-field  { flex: 1; border: none; background: transparent; font-family: var(--font-body); font-size: 14px; color: var(--color-text-primary); outline: none; }
+  .forgot-link  { font-size: 13px; font-weight: 500; color: var(--color-accent); text-decoration: none; display: block; text-align: right; margin-top: -6px; margin-bottom: 12px; }
+  .btn-full     { width: 100%; justify-content: center; padding: 12px; font-size: 15px; }
+
+  /* ─── CATEGORIES VIEW ───────────────────────────────── */
+  .catview { padding: 20px 24px; font-family: var(--font-body); background: var(--color-bg); min-height: 520px; }
+  .catview-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+  .view-title { font-family: var(--font-display); font-size: 1.8rem; font-weight: 700; letter-spacing: -.03em; color: var(--color-text-primary); }
+  .view-sub   { font-size: 13px; color: var(--color-text-secondary); margin-top: 2px; }
+  .btn-group  { display: flex; gap: 8px; flex-wrap: wrap; }
+  .budget-tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; margin-bottom: 16px; }
+  .budget-tab { padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; white-space: nowrap; font-family: var(--font-body); }
+  .budget-tab.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); font-weight: 600; }
+  .budget-tab.default::after { content: ' ✦'; font-size: 10px; }
+  .cat-section { margin-bottom: 24px; }
+  .cat-section-title { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: 8px; }
+  .cat-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 6px; }
+  .cat-name-block { flex: 1; }
+  .cat-name  { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+  .cat-desc  { font-size: 12px; color: var(--color-text-muted); margin-top: 1px; }
+  .cat-amounts { text-align: right; min-width: 120px; }
+  .cat-budget { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
+  .cat-actual { font-size: 12px; color: var(--color-text-muted); }
+  .cat-bar { width: 80px; }
+  .cat-actions { display: flex; gap: 4px; }
+  .icon-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--color-border); background: var(--color-surface-alt); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+  /* ─── PERFORMANCE VIEW ──────────────────────────────── */
+  .perfview { padding: 20px 24px; font-family: var(--font-body); background: var(--color-bg); min-height: 520px; }
+  .perf-bar-chart { display: flex; flex-direction: column; gap: 14px; }
+  .perf-bar-row { display: flex; align-items: center; gap: 12px; }
+  .perf-bar-label { font-size: 13px; font-weight: 500; color: var(--color-text-primary); width: 130px; text-align: right; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .perf-bar-track { flex: 1; height: 20px; background: var(--color-surface-alt); border-radius: 9999px; overflow: hidden; position: relative; }
+  .perf-bar-actual { height: 100%; border-radius: 9999px; background: var(--color-accent); }
+  .perf-bar-actual.over { background: var(--color-negative); }
+  .perf-bar-budget-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--color-border-strong); }
+  .perf-bar-vals { font-size: 12px; color: var(--color-text-muted); width: 90px; flex-shrink: 0; }
+
+  /* ─── TRANSACTIONS VIEW ─────────────────────────────── */
+  .txnview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+  .tab-strip { display: flex; border-bottom: 2px solid var(--color-border); margin-bottom: 16px; }
+  .tab-item { padding: 10px 16px; font-size: 14px; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; font-family: var(--font-body); }
+  .tab-item.active { color: var(--color-accent-dark); border-bottom-color: var(--color-accent); font-weight: 600; }
+
+  /* ─── SETTINGS VIEW ─────────────────────────────────── */
+  .settings-section { margin-bottom: 24px; }
+  .settings-section-title { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: 8px; }
+  .institution-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+  .institution-icon { width: 44px; height: 44px; border-radius: 10px; background: var(--color-accent-light); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .institution-name { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+  .institution-sub  { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
+  .institution-status { margin-left: auto; }
+  .status-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--color-positive); }
+  .status-dot::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--color-positive); }
+
+  /* ─── ASK CHIIZ CHAT ────────────────────────────────── */
+  .ask-chiiz-fab {
+    position: absolute; bottom: 20px; right: 20px;
+    width: 52px; height: 52px; border-radius: 50%;
+    background: var(--color-accent); box-shadow: 0 4px 16px rgba(45,204,143,.4);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .ask-chiiz-panel {
+    position: absolute; bottom: 80px; right: 20px; width: 320px;
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 16px;
+    box-shadow: var(--shadow-lg); overflow: hidden;
+  }
+  .ask-header { padding: 14px 16px; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; gap: 8px; }
+  .ask-header-title { font-family: var(--font-display); font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+  .ask-header-sub   { font-size: 11px; color: var(--color-text-muted); }
+  .ask-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .ask-bubble { padding: 10px 12px; border-radius: 10px; font-size: 13px; max-width: 80%; }
+  .ask-bubble.ai   { background: var(--color-surface-alt); color: var(--color-text-primary); }
+  .ask-bubble.user { background: var(--color-accent); color: #fff; align-self: flex-end; }
+  .ask-input-row { padding: 10px 12px; border-top: 1px solid var(--color-border); display: flex; gap: 8px; }
+  .ask-input { flex: 1; border: 1px solid var(--color-border); border-radius: 9999px; padding: 7px 14px; font-size: 13px; font-family: var(--font-body); background: var(--color-surface-alt); color: var(--color-text-primary); outline: none; }
+  .ask-send { width: 32px; height: 32px; border-radius: 50%; background: var(--color-accent); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+  /* ─── UPLOAD VIEW ───────────────────────────────────── */
+  .upload-zone { border: 2px dashed var(--color-border-strong); border-radius: 14px; padding: 40px; text-align: center; background: var(--color-surface); }
+  .upload-icon { font-size: 32px; margin-bottom: 12px; }
+  .upload-title { font-family: var(--font-display); font-size: 1.1rem; font-weight: 600; color: var(--color-text-primary); margin-bottom: 4px; }
+  .upload-sub   { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 16px; }
+
+  /* ─── PAGE HEADER ────────────────────────────────────── */
+  .doc-header {
+    margin-left: 200px; background: #1C1C2A; border-bottom: 1px solid #2E2E42;
+    padding: 28px 40px 24px; position: sticky; top: 0; z-index: 100;
+  }
+  .doc-title { font-family: var(--font-display); font-size: 28px; font-weight: 700; letter-spacing: -.03em; color: #F0EFF8; }
+  .doc-meta  { font-family: var(--font-body); font-size: 13px; color: #50506A; margin-top: 4px; }
+  .doc-chips { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .doc-chip  { padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; border: 1px solid #2E2E42; color: #9090A8; font-family: var(--font-body); }
+  .doc-chip.green { border-color: #2DCC8F44; color: #2DCC8F; background: #2DCC8F11; }
+
+  /* ─── DESIGN TOKEN GRID ──────────────────────────────── */
+  .token-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+  .token-swatch { background: #1C1C2A; border: 1px solid #2E2E42; border-radius: 8px; overflow: hidden; }
+  .token-color  { height: 44px; }
+  .token-info   { padding: 8px 10px; }
+  .token-name   { font-family: var(--font-body); font-size: 11px; font-weight: 600; color: #9090A8; }
+  .token-hex    { font-family: var(--font-body); font-size: 11px; color: #50506A; margin-top: 1px; }
+
+  /* ─── COMPONENT STRIP ────────────────────────────────── */
+  .comp-row   { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px; background: var(--color-bg); border-radius: 12px; }
+
+  /* SVG icon placeholder */
+  .icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+<!-- TOC -->
+<nav class="toc">
+  <h3>Chiiz UI</h3>
+  <a href="#tokens">Design Tokens</a>
+  <a href="#components">Components</a>
+  <a href="#auth">Auth View</a>
+  <a href="#dashboard">Dashboard</a>
+  <a href="#categories">Budget / Categories</a>
+  <a href="#transactions">Transactions</a>
+  <a href="#performance">Performance</a>
+  <a href="#settings">Settings</a>
+  <a href="#upload">Upload Data</a>
+  <a href="#askchiiz">Ask Chiiz Chat</a>
+</nav>
+
+<!-- Page Header -->
+<div class="doc-header">
+  <div class="doc-title">Chiiz — UI Scaffolding</div>
+  <div class="doc-meta">Static representation of all views, components, and design tokens · Generated 2026-05-31</div>
+  <div class="doc-chips">
+    <span class="doc-chip green">React 19 + TypeScript</span>
+    <span class="doc-chip">Vite + Tailwind CSS</span>
+    <span class="doc-chip">Sora + DM Sans</span>
+    <span class="doc-chip">Lucide Icons</span>
+    <span class="doc-chip">Recharts</span>
+    <span class="doc-chip">Supabase + Plaid</span>
+  </div>
+</div>
+
+<div class="page">
+
+<!-- ══════════════════════════════════════════════════════
+     DESIGN TOKENS
+     ══════════════════════════════════════════════════════ -->
+<section class="section-block" id="tokens">
+  <div class="section-label">Design System</div>
+  <div class="section-title">Color Tokens</div>
+  <div class="section-desc">All colors are CSS custom properties on <code>:root</code>. Never hardcode hex values in components.</div>
+
+  <div class="token-grid">
+    <div class="token-swatch"><div class="token-color" style="background:#F7F6F2"></div><div class="token-info"><div class="token-name">--color-bg</div><div class="token-hex">#F7F6F2 — warm off-white canvas</div></div></div>
+    <div class="token-swatch"><div class="token-color" style="background:#FFFFFF;border-bottom:1px solid #eee"></div><div class="token-info"><div class="token-name">--color-surface</div><div class="token-hex">#FFFFFF — cards, modals</div></div></div>
+    <div class="token-swatch"><div class="token-color" style="background:#EEECEA"></div><div class="token-info"><div class="token-name">--color-surface-alt</div><div class="token-hex">#EEECEA — inputs, secondary</div></div></div>
+    <div class="token-swatch"><div class="token-color" style="background:#2DCC8F"></div><div class="token-info"><div class="token-name">--color-accent</div><div class="token-hex">#2DCC8F — Chiiz green</div></div></div>
+    <div class="token-swatch"><div class="token-color" style="background:#D4F5E9"></div><div class="token-info"><div class="token-name">--color-accent-light</div><div class="token-hex">#D4F5E9 — accent backgrounds</div></div></div>
+    <div class="token-swatch"><div class="token-color" style="background:#1FA870"></div><div class="token-info"><div class="token-name">--color-accent-dark</div><div class="token-hex">#1FA870 — hover on accent</div></div></div>
+    <div class="token-swatch"><div class="token-color" style="background:#1A1A2E"></div><div class="token-info"><div class="token-name">--color-text-primary</div><div class="token-hex">#1A1A2E — headings, labels</div></div></div>
+    <div class="token-swatch"><div class="token-color" style="background:#6B6B80"></div><div class="token-info"><div class="token-name">--color-text-secondary</div><div class="token-hex">#6B6B80 — body, meta</div></div></div>
+    <div class="token-swatch"><div class="token-color" style="background:#ADADBE"></div><div class="token-info"><div class="token-name">--color-text-muted</div><div class="token-hex">#ADADBE — placeholders</div></div></div>
+    <div class="token-swatch"><div class="token-color" style="background:#F0635A"></div><div class="token-info"><div class="token-name">--color-negative</div><div class="token-hex">#F0635A — over budget, alerts</div></div></div>
+    <div class="token-swatch"><div class="token-color" style="background:#F5A623"></div><div class="token-info"><div class="token-name">--color-warning</div><div class="token-hex">#F5A623 — approaching limit</div></div></div>
+    <div class="token-swatch"><div class="token-color" style="background:#E8E6E1"></div><div class="token-info"><div class="token-name">--color-border</div><div class="token-hex">#E8E6E1 — card borders</div></div></div>
+  </div>
+
+  <div class="section-title" style="margin-top:12px">Typography</div>
+  <div style="background:var(--color-bg);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:10px">
+    <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:700;letter-spacing:-.03em;color:var(--color-text-primary)">Sora Bold — Page titles, hero numbers</div>
+    <div style="font-family:'Sora',sans-serif;font-size:22px;font-weight:600;letter-spacing:-.02em;color:var(--color-text-primary)">Sora SemiBold — Section headings, card titles</div>
+    <div style="font-family:'DM Sans',sans-serif;font-size:15px;font-weight:400;color:var(--color-text-secondary)">DM Sans Regular — Body text, descriptions, metadata</div>
+    <div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--color-text-secondary)">DM Sans SemiBold — Labels, buttons, table headers</div>
+    <div style="font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--color-text-muted)">DM Sans — Uppercase section labels, 11px, tracking .1em</div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     COMPONENTS
+     ══════════════════════════════════════════════════════ -->
+<section class="section-block" id="components">
+  <div class="section-label">Components</div>
+  <div class="section-title">Buttons</div>
+  <div class="comp-row">
+    <button class="btn btn-primary">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Transaction
+    </button>
+    <button class="btn btn-secondary">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sign out
+    </button>
+    <button class="btn" style="background:var(--color-accent-light);color:var(--color-accent-dark)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      AI Suggest
+    </button>
+    <button class="btn" style="background:transparent;color:var(--color-accent);border:1px solid var(--color-accent)">Ghost</button>
+    <button class="btn btn-primary" disabled style="opacity:.5">Loading...</button>
+  </div>
+
+  <div class="section-title" style="margin-top:12px">Badges & Chips</div>
+  <div class="comp-row">
+    <span class="badge">Dining</span>
+    <span class="badge">Income</span>
+    <span class="badge warn">Uncategorized</span>
+    <span class="badge neg">Over budget</span>
+    <span class="badge" style="background:#EDE9FE;color:#6D28D9">AI Suggested</span>
+  </div>
+
+  <div class="section-title" style="margin-top:12px">Progress Bars</div>
+  <div style="background:var(--color-bg);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px">
+    <div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-text-secondary);margin-bottom:4px"><span>Groceries</span><span>$620 / $800</span></div>
+      <div class="progress-track"><div class="progress-fill" style="width:77.5%;background:var(--color-positive)"></div></div>
+    </div>
+    <div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-text-secondary);margin-bottom:4px"><span>Dining Out</span><span>$380 / $400</span></div>
+      <div class="progress-track"><div class="progress-fill warn" style="width:95%"></div></div>
+    </div>
+    <div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-text-secondary);margin-bottom:4px"><span>Entertainment</span><span>$310 / $200</span></div>
+      <div class="progress-track"><div class="progress-fill" style="width:100%;background:var(--color-negative)"></div></div>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:12px">Form Inputs</div>
+  <div style="background:var(--color-bg);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:10px;max-width:400px">
+    <div class="input-wrap">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ADADBE" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input class="input-field" placeholder="Search transactions…" />
+    </div>
+    <div class="input-wrap" style="border-color:var(--color-accent);box-shadow:0 0 0 3px var(--color-accent-light)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2DCC8F" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <input class="input-field" placeholder="Password" value="••••••••" />
+    </div>
+    <select class="filter-select" style="width:100%;border-radius:10px;padding:10px 14px">
+      <option>All categories</option>
+      <option>Groceries</option>
+      <option>Dining Out</option>
+    </select>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     AUTH VIEW
+     ══════════════════════════════════════════════════════ -->
+<section class="section-block" id="auth">
+  <div class="section-label">View</div>
+  <div class="section-title">Auth — Login / Signup / Forgot Password</div>
+  <div class="section-desc">Shown when no session exists. Single card with tab toggle between Log in and Sign up.</div>
+
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="browser-dot red"></div><div class="browser-dot amber"></div><div class="browser-dot green"></div>
+      <div class="browser-url">chiiz.app/</div>
+    </div>
+    <div class="browser-content">
+      <div class="auth-bg">
+        <div class="auth-card">
+          <div class="auth-logo-row">
+            <div class="auth-logo">C</div>
+            <div class="auth-app-name">Chiiz</div>
+            <div class="auth-app-sub">Smart budgeting and savings</div>
+          </div>
+          <div class="auth-panel">
+            <div class="auth-tabs">
+              <button class="auth-tab active">Log in</button>
+              <button class="auth-tab">Sign up</button>
+            </div>
+            <div class="auth-heading">Welcome back</div>
+            <div class="auth-sub">Sign in to return to your budgeting workspace.</div>
+            <label class="field-label">Email</label>
+            <div class="input-wrap">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ADADBE" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              <input class="input-field" type="email" placeholder="you@example.com" />
+            </div>
+            <label class="field-label">Password</label>
+            <div class="input-wrap">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ADADBE" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <input class="input-field" type="password" placeholder="Your password" />
+            </div>
+            <a class="forgot-link">Forgot password?</a>
+            <button class="btn btn-primary btn-full">Log in</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     DASHBOARD VIEW
+     ══════════════════════════════════════════════════════ -->
+<section class="section-block" id="dashboard">
+  <div class="section-label">View</div>
+  <div class="section-title">Dashboard</div>
+  <div class="section-desc">Main landing view after login. Summary KPI strip → spending pie → recent transactions table. Right sidebar: top categories + alerts.</div>
+
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="browser-dot red"></div><div class="browser-dot amber"></div><div class="browser-dot green"></div>
+      <div class="browser-url">chiiz.app/</div>
+    </div>
+    <div class="browser-content">
+      <div class="app-shell">
+        <!-- Sidebar -->
+        <div class="sidebar">
+          <div class="sidebar-brand">
+            <div class="sidebar-logo">C</div>
+            <div>
+              <div class="sidebar-brand-name">Chiiz</div>
+              <div class="sidebar-brand-sub">Smart budgeting</div>
+            </div>
+          </div>
+          <div class="sidebar-body">
+            <div class="sidebar-section-label">Main</div>
+            <button class="nav-item active">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              Dashboard
+            </button>
+            <button class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Budget
+            </button>
+            <button class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              Transactions
+              <span class="nav-badge">4</span>
+            </button>
+            <button class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              Performance
+            </button>
+            <div class="sidebar-gap"></div>
+            <div class="sidebar-section-label">Accounts</div>
+            <button class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              Linked Accounts
+            </button>
+            <div class="sidebar-gap"></div>
+            <div class="sidebar-section-label">Data</div>
+            <button class="nav-item">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+              Upload Data
+            </button>
+          </div>
+        </div>
+
+        <!-- Main -->
+        <div>
+          <div class="topnav">
+            <button class="btn btn-primary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Transaction
+            </button>
+            <button class="btn btn-secondary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Sign out
+            </button>
+          </div>
+
+          <div class="main-content">
+            <!-- Filters -->
+            <div class="filters-bar">
+              <button class="filter-pill active">Month</button>
+              <button class="filter-pill">YTD</button>
+              <button class="filter-pill">Last 12 mo</button>
+              <button class="filter-pill">All time</button>
+              <select class="filter-select"><option>May 2026</option></select>
+              <select class="filter-select"><option>All accounts</option></select>
+              <select class="filter-select"><option>All categories</option></select>
+            </div>
+
+            <!-- KPI strip -->
+            <div class="kstrip">
+              <div class="kstrip-cell">
+                <div class="kstrip-label">Income</div>
+                <div class="kstrip-value pos">$8,450</div>
+                <div class="kstrip-sub">For May 2026</div>
+              </div>
+              <div class="kstrip-cell">
+                <div class="kstrip-label">Total Spending</div>
+                <div class="kstrip-value neutral">$5,230</div>
+                <div class="kstrip-sub">For May 2026</div>
+              </div>
+              <div class="kstrip-cell">
+                <div class="kstrip-label">Remaining Budget</div>
+                <div class="kstrip-value pos">$1,370</div>
+                <div class="kstrip-sub">76% spent</div>
+              </div>
+              <div class="kstrip-cell">
+                <div class="kstrip-label">Savings Rate</div>
+                <div class="kstrip-value pos">38%</div>
+                <div class="kstrip-sub">Healthy trend</div>
+              </div>
+            </div>
+
+            <!-- Main grid -->
+            <div class="dash-grid">
+              <div class="dash-main">
+                <!-- Spending Breakdown -->
+                <div class="card">
+                  <div class="card-header">
+                    <div>
+                      <div class="card-title">Spending Breakdown</div>
+                      <div class="card-sub">Where your money went in the selected period</div>
+                    </div>
+                    <a class="card-link">View all →</a>
+                  </div>
+                  <div class="pie-section">
+                    <div>
+                      <div class="pie-placeholder">
+                        <div class="pie-hole">
+                          <div class="pie-hole-val">$5,230</div>
+                          <div class="pie-hole-lbl">Total</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <div class="legend-row"><div style="display:flex;align-items:center;gap:6px"><span class="legend-dot" style="background:#2DCC8F"></span><span class="legend-name">Groceries</span></div><span class="legend-val">$1,980</span></div>
+                      <div class="legend-row"><div style="display:flex;align-items:center;gap:6px"><span class="legend-dot" style="background:#667EEA"></span><span class="legend-name">Rent / Mortgage</span></div><span class="legend-val">$1,250</span></div>
+                      <div class="legend-row"><div style="display:flex;align-items:center;gap:6px"><span class="legend-dot" style="background:#F5A623"></span><span class="legend-name">Dining Out</span></div><span class="legend-val">$880</span></div>
+                      <div class="legend-row"><div style="display:flex;align-items:center;gap:6px"><span class="legend-dot" style="background:#F0635A"></span><span class="legend-name">Transportation</span></div><span class="legend-val">$620</span></div>
+                      <div class="legend-row"><div style="display:flex;align-items:center;gap:6px"><span class="legend-dot" style="background:#63B3ED"></span><span class="legend-name">Entertainment</span></div><span class="legend-val">$500</span></div>
+                    </div>
+                  </div>
+                  <div class="card-footer">View all categories →</div>
+                </div>
+
+                <!-- Recent Transactions -->
+                <div class="card">
+                  <div class="card-header">
+                    <div>
+                      <div class="card-title">Recent Transactions</div>
+                      <div class="card-sub">AI-categorized</div>
+                    </div>
+                    <a class="card-link">See all →</a>
+                  </div>
+                  <table class="txn-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Category</th>
+                        <th>Account</th>
+                        <th style="text-align:right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>2026-05-30</td><td class="txn-name">Whole Foods Market</td><td><span class="badge">Groceries</span></td><td>Chase · Checking</td><td class="txn-amount">-$94.20</td>
+                      </tr>
+                      <tr>
+                        <td>2026-05-29</td><td class="txn-name">Chipotle Mexican Grill</td><td><span class="badge">Dining Out</span></td><td>Chase · Checking</td><td class="txn-amount">-$18.50</td>
+                      </tr>
+                      <tr>
+                        <td>2026-05-28</td><td class="txn-name">Salary — Acme Corp</td><td><span class="badge" style="background:#D1FAE5;color:#065F46">Income</span></td><td>Chase · Checking</td><td class="txn-amount credit">+$4,225.00</td>
+                      </tr>
+                      <tr>
+                        <td>2026-05-27</td><td class="txn-name">Netflix</td><td><span class="badge">Entertainment</span></td><td>Amex · Blue</td><td class="txn-amount">-$15.99</td>
+                      </tr>
+                      <tr>
+                        <td>2026-05-26</td><td class="txn-name">Shell Gas Station</td><td><span class="badge warn">Uncategorized</span></td><td>Chase · Checking</td><td class="txn-amount">-$62.40</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Right sidebar -->
+              <div class="dash-aside">
+                <!-- Top Spending -->
+                <div class="card">
+                  <div class="card-header">
+                    <div>
+                      <div class="card-title">Top Spending</div>
+                      <div class="card-sub">Where your money went</div>
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    <div class="rank-row"><div style="display:flex;align-items:center"><span class="rank-num">1</span><span class="rank-name">Groceries</span></div><span class="rank-val">$1,980</span></div>
+                    <div class="rank-row"><div style="display:flex;align-items:center"><span class="rank-num">2</span><span class="rank-name">Rent</span></div><span class="rank-val">$1,250</span></div>
+                    <div class="rank-row"><div style="display:flex;align-items:center"><span class="rank-num">3</span><span class="rank-name">Dining Out</span></div><span class="rank-val">$880</span></div>
+                  </div>
+                  <div class="card-footer">View all categories →</div>
+                </div>
+
+                <!-- Alerts & Insights -->
+                <div class="card">
+                  <div class="card-header">
+                    <div>
+                      <div class="card-title">Alerts & Insights</div>
+                      <div class="card-sub">Keep an eye on your budget</div>
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    <div class="alert-item">
+                      <div class="alert-header">
+                        <div style="display:flex;align-items:center"><span class="alert-icon">!</span><span class="alert-name">Entertainment</span></div>
+                        <span class="alert-amount">$500</span>
+                      </div>
+                      <div class="alert-desc">$500 spent of <strong>$200</strong> budgeted</div>
+                      <div class="progress-track"><div class="progress-fill" style="width:100%"></div></div>
+                    </div>
+                    <div class="alert-item">
+                      <div class="alert-header">
+                        <div style="display:flex;align-items:center"><span class="alert-icon warn">!</span><span class="alert-name">Dining Out</span></div>
+                        <span class="alert-amount warn">$380</span>
+                      </div>
+                      <div class="alert-desc">$380 spent of <strong>$400</strong> budgeted</div>
+                      <div class="progress-track"><div class="progress-fill warn" style="width:95%"></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     CATEGORIES / BUDGET VIEW
+     ══════════════════════════════════════════════════════ -->
+<section class="section-block" id="categories">
+  <div class="section-label">View</div>
+  <div class="section-title">Budget / Categories</div>
+  <div class="section-desc">Manage multiple budget sets (templates) with named category sets assigned to calendar months. AI suggestion workflow included.</div>
+
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="browser-dot red"></div><div class="browser-dot amber"></div><div class="browser-dot green"></div>
+      <div class="browser-url">chiiz.app/ → Budget</div>
+    </div>
+    <div class="browser-content">
+      <div class="app-shell">
+        <div class="sidebar">
+          <div class="sidebar-brand">
+            <div class="sidebar-logo">C</div>
+            <div><div class="sidebar-brand-name">Chiiz</div><div class="sidebar-brand-sub">Smart budgeting</div></div>
+          </div>
+          <div class="sidebar-body">
+            <div class="sidebar-section-label">Main</div>
+            <button class="nav-item">Dashboard</button>
+            <button class="nav-item active">Budget</button>
+            <button class="nav-item">Transactions <span class="nav-badge">4</span></button>
+            <button class="nav-item">Performance</button>
+            <div class="sidebar-gap"></div>
+            <div class="sidebar-section-label">Accounts</div>
+            <button class="nav-item">Linked Accounts</button>
+            <div class="sidebar-gap"></div>
+            <div class="sidebar-section-label">Data</div>
+            <button class="nav-item">Upload Data</button>
+          </div>
+        </div>
+        <div>
+          <div class="topnav">
+            <button class="btn btn-primary"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Transaction</button>
+            <button class="btn btn-secondary">Sign out</button>
+          </div>
+          <div class="catview">
+            <div class="catview-header">
+              <div>
+                <div class="view-title">Budget</div>
+                <div class="view-sub">Manage your category sets and monthly budget allocations</div>
+              </div>
+              <div class="btn-group">
+                <button class="btn" style="background:var(--color-accent-light);color:var(--color-accent-dark);font-family:var(--font-body);font-size:13px">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  AI Suggest
+                </button>
+                <button class="btn btn-primary">+ Add Category</button>
+              </div>
+            </div>
+
+            <!-- Budget set tabs -->
+            <div class="budget-tabs">
+              <button class="budget-tab active default">Default Budget</button>
+              <button class="budget-tab">Vacation Month</button>
+              <button class="budget-tab">Lean Month</button>
+              <button class="budget-tab" style="color:var(--color-accent);border-color:var(--color-accent-light)">+ New Set</button>
+            </div>
+
+            <!-- Income categories -->
+            <div class="cat-section">
+              <div class="cat-section-title">Income</div>
+              <div class="cat-row">
+                <div class="cat-name-block">
+                  <div class="cat-name">Salary</div>
+                  <div class="cat-desc">Primary employment income</div>
+                </div>
+                <div class="cat-bar">
+                  <div class="progress-track"><div class="progress-fill" style="width:100%;background:var(--color-positive)"></div></div>
+                </div>
+                <div class="cat-amounts">
+                  <div class="cat-budget">$8,450 / $8,000</div>
+                  <div class="cat-actual">Actual / Budget</div>
+                </div>
+                <div class="cat-actions">
+                  <div class="icon-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+                  <div class="icon-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#F0635A" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></div>
+                </div>
+              </div>
+              <div class="cat-row">
+                <div class="cat-name-block">
+                  <div class="cat-name">Freelance</div>
+                </div>
+                <div class="cat-bar">
+                  <div class="progress-track"><div class="progress-fill" style="width:60%;background:var(--color-positive)"></div></div>
+                </div>
+                <div class="cat-amounts">
+                  <div class="cat-budget">$600 / $1,000</div>
+                  <div class="cat-actual">Actual / Budget</div>
+                </div>
+                <div class="cat-actions">
+                  <div class="icon-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+                  <div class="icon-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#F0635A" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Expense categories -->
+            <div class="cat-section">
+              <div class="cat-section-title">Expenses</div>
+              <div class="cat-row">
+                <div class="cat-name-block">
+                  <div class="cat-name">Groceries</div>
+                  <div class="cat-desc">Food &amp; household supplies</div>
+                </div>
+                <div class="cat-bar">
+                  <div class="progress-track"><div class="progress-fill" style="width:79%;background:var(--color-warning)"></div></div>
+                </div>
+                <div class="cat-amounts">
+                  <div class="cat-budget">$1,980 / $2,500</div>
+                  <div class="cat-actual">Actual / Budget</div>
+                </div>
+                <div class="cat-actions">
+                  <div class="icon-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+                  <div class="icon-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#F0635A" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></div>
+                </div>
+              </div>
+              <div class="cat-row" style="border-color:var(--color-negative);background:#FFF5F5">
+                <div class="cat-name-block">
+                  <div class="cat-name">Entertainment</div>
+                </div>
+                <div class="cat-bar">
+                  <div class="progress-track"><div class="progress-fill" style="width:100%;background:var(--color-negative)"></div></div>
+                </div>
+                <div class="cat-amounts">
+                  <div class="cat-budget" style="color:var(--color-negative)">$500 / $200</div>
+                  <div class="cat-actual">Over budget</div>
+                </div>
+                <div class="cat-actions">
+                  <div class="icon-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+                  <div class="icon-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#F0635A" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></div>
+                </div>
+              </div>
+              <!-- AI suggested row -->
+              <div class="cat-row" style="border-color:#C4B5FD;background:#FAF5FF;opacity:.9">
+                <div class="cat-name-block">
+                  <div class="cat-name" style="display:flex;align-items:center;gap:8px">
+                    Transportation
+                    <span class="badge" style="background:#EDE9FE;color:#6D28D9">AI Suggested</span>
+                  </div>
+                </div>
+                <div class="cat-amounts">
+                  <div class="cat-budget">$400 suggested</div>
+                </div>
+                <div class="cat-actions">
+                  <button class="btn btn-primary" style="padding:5px 12px;font-size:12px">Accept</button>
+                  <div class="icon-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#F0635A" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     TRANSACTIONS VIEW
+     ══════════════════════════════════════════════════════ -->
+<section class="section-block" id="transactions">
+  <div class="section-label">View</div>
+  <div class="section-title">Transactions</div>
+  <div class="section-desc">Paginated list of synced + manual transactions. Tabs: Needs Review vs Confirmed. Per-row category override dropdown. Sync & AI Categorize actions in header.</div>
+
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="browser-dot red"></div><div class="browser-dot amber"></div><div class="browser-dot green"></div>
+      <div class="browser-url">chiiz.app/ → Transactions</div>
+    </div>
+    <div class="browser-content">
+      <div class="app-shell">
+        <div class="sidebar">
+          <div class="sidebar-brand"><div class="sidebar-logo">C</div><div><div class="sidebar-brand-name">Chiiz</div><div class="sidebar-brand-sub">Smart budgeting</div></div></div>
+          <div class="sidebar-body">
+            <div class="sidebar-section-label">Main</div>
+            <button class="nav-item">Dashboard</button>
+            <button class="nav-item">Budget</button>
+            <button class="nav-item active">Transactions <span class="nav-badge">4</span></button>
+            <button class="nav-item">Performance</button>
+          </div>
+        </div>
+        <div>
+          <div class="topnav">
+            <button class="btn btn-primary"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Transaction</button>
+            <button class="btn btn-secondary">Sign out</button>
+          </div>
+          <div class="main-content">
+            <div class="txnview-header">
+              <div>
+                <div class="view-title">Transactions</div>
+                <div class="view-sub">1,248 transactions synced from 2 institutions</div>
+              </div>
+              <div class="btn-group">
+                <button class="btn" style="background:var(--color-accent-light);color:var(--color-accent-dark);font-family:var(--font-body);font-size:13px">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  AI Categorize
+                </button>
+                <button class="btn btn-secondary" style="font-family:var(--font-body);font-size:13px">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                  Sync
+                </button>
+              </div>
+            </div>
+
+            <!-- Filters row -->
+            <div class="filters-bar">
+              <div class="input-wrap" style="border-radius:9999px;padding:6px 14px;flex:none">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ADADBE" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input class="input-field" placeholder="Search…" style="font-size:13px"/>
+              </div>
+              <select class="filter-select"><option>All months</option><option>May 2026</option></select>
+              <select class="filter-select"><option>All types</option><option>Expense</option><option>Income</option></select>
+              <select class="filter-select"><option>All categories</option></select>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tab-strip">
+              <div class="tab-item active">Needs Review <span class="nav-badge" style="margin-left:6px;background:#f59e0b">4</span></div>
+              <div class="tab-item">Confirmed</div>
+            </div>
+
+            <div class="card">
+              <table class="txn-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th>Account</th>
+                    <th>Source</th>
+                    <th style="text-align:right">Amount</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="background:#FFFBEB">
+                    <td>2026-05-30</td><td class="txn-name">Shell Gas Station</td>
+                    <td><select class="filter-select" style="font-size:12px;padding:4px 8px"><option>Uncategorized</option><option>Transportation</option></select></td>
+                    <td>Chase · Checking</td><td><span class="badge warn">Needs review</span></td><td class="txn-amount">-$62.40</td>
+                    <td><button class="btn btn-primary" style="padding:5px 10px;font-size:11px">Save</button></td>
+                  </tr>
+                  <tr style="background:#FFFBEB">
+                    <td>2026-05-28</td><td class="txn-name">Amazon.com</td>
+                    <td><select class="filter-select" style="font-size:12px;padding:4px 8px"><option>Shopping</option></select></td>
+                    <td>Amex · Blue</td><td><span class="badge warn">Needs review</span></td><td class="txn-amount">-$134.99</td>
+                    <td><button class="btn btn-primary" style="padding:5px 10px;font-size:11px">Save</button></td>
+                  </tr>
+                  <tr>
+                    <td>2026-05-29</td><td class="txn-name">Chipotle Mexican Grill</td>
+                    <td><span class="badge">Dining Out</span></td>
+                    <td>Chase · Checking</td><td><span class="badge" style="background:#D1FAE5;color:#065F46">AI</span></td><td class="txn-amount">-$18.50</td>
+                    <td><button class="btn btn-secondary" style="padding:5px 10px;font-size:11px">Override</button></td>
+                  </tr>
+                  <tr>
+                    <td>2026-05-28</td><td class="txn-name">Salary — Acme Corp</td>
+                    <td><span class="badge" style="background:#D1FAE5;color:#065F46">Income</span></td>
+                    <td>Chase · Checking</td><td><span class="badge">Rule</span></td><td class="txn-amount credit">+$4,225.00</td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-family:var(--font-body);font-size:13px;color:var(--color-text-secondary)">
+              <span>Showing 1–25 of 1,248 transactions</span>
+              <div style="display:flex;gap:4px">
+                <button class="btn btn-secondary" style="padding:5px 12px">← Prev</button>
+                <button class="btn btn-primary" style="padding:5px 12px">Next →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     PERFORMANCE VIEW
+     ══════════════════════════════════════════════════════ -->
+<section class="section-block" id="performance">
+  <div class="section-label">View</div>
+  <div class="section-title">Performance</div>
+  <div class="section-desc">Budget vs actual horizontal bar chart per category. Budgeted amount shown as a line marker; actual spend as a filled bar. Drill-down into per-category transaction detail.</div>
+
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="browser-dot red"></div><div class="browser-dot amber"></div><div class="browser-dot green"></div>
+      <div class="browser-url">chiiz.app/ → Performance</div>
+    </div>
+    <div class="browser-content">
+      <div class="app-shell">
+        <div class="sidebar">
+          <div class="sidebar-brand"><div class="sidebar-logo">C</div><div><div class="sidebar-brand-name">Chiiz</div><div class="sidebar-brand-sub">Smart budgeting</div></div></div>
+          <div class="sidebar-body">
+            <div class="sidebar-section-label">Main</div>
+            <button class="nav-item">Dashboard</button>
+            <button class="nav-item">Budget</button>
+            <button class="nav-item">Transactions <span class="nav-badge">4</span></button>
+            <button class="nav-item active">Performance</button>
+          </div>
+        </div>
+        <div>
+          <div class="topnav">
+            <button class="btn btn-primary"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Transaction</button>
+            <button class="btn btn-secondary">Sign out</button>
+          </div>
+          <div class="perfview">
+            <div style="margin-bottom:16px">
+              <div class="view-title">Performance</div>
+              <div class="view-sub">Budget vs actual spend per category · May 2026</div>
+            </div>
+
+            <div class="filters-bar" style="margin-bottom:16px">
+              <select class="filter-select"><option>May 2026</option></select>
+              <select class="filter-select"><option>All types</option><option>Expense</option><option>Income</option></select>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><div class="card-title">Category Performance</div><span style="font-size:12px;color:var(--color-text-muted)"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--color-accent);margin-right:4px"></span>Actual &nbsp;<span style="display:inline-block;width:2px;height:10px;background:var(--color-border-strong);margin-right:4px;vertical-align:middle"></span>Budget</span></div>
+              <div class="card-body">
+                <div class="perf-bar-chart">
+                  <div class="perf-bar-row">
+                    <div class="perf-bar-label">Groceries</div>
+                    <div class="perf-bar-track">
+                      <div class="perf-bar-actual" style="width:79%"></div>
+                      <div class="perf-bar-budget-line" style="left:100%"></div>
+                    </div>
+                    <div class="perf-bar-vals">$1,980 / $2,500</div>
+                  </div>
+                  <div class="perf-bar-row">
+                    <div class="perf-bar-label">Rent / Mortgage</div>
+                    <div class="perf-bar-track">
+                      <div class="perf-bar-actual" style="width:100%"></div>
+                      <div class="perf-bar-budget-line" style="left:100%"></div>
+                    </div>
+                    <div class="perf-bar-vals">$1,250 / $1,250</div>
+                  </div>
+                  <div class="perf-bar-row">
+                    <div class="perf-bar-label">Dining Out</div>
+                    <div class="perf-bar-track">
+                      <div class="perf-bar-actual" style="width:95%"></div>
+                      <div class="perf-bar-budget-line" style="left:95%"></div>
+                    </div>
+                    <div class="perf-bar-vals">$380 / $400</div>
+                  </div>
+                  <div class="perf-bar-row">
+                    <div class="perf-bar-label">Entertainment</div>
+                    <div class="perf-bar-track">
+                      <div class="perf-bar-actual over" style="width:100%"></div>
+                      <div class="perf-bar-budget-line" style="left:40%"></div>
+                    </div>
+                    <div class="perf-bar-vals" style="color:var(--color-negative)">$500 / $200 !</div>
+                  </div>
+                  <div class="perf-bar-row">
+                    <div class="perf-bar-label">Transportation</div>
+                    <div class="perf-bar-track">
+                      <div class="perf-bar-actual" style="width:52%"></div>
+                      <div class="perf-bar-budget-line" style="left:100%"></div>
+                    </div>
+                    <div class="perf-bar-vals">$620 / $1,200</div>
+                  </div>
+                  <div class="perf-bar-row">
+                    <div class="perf-bar-label">Utilities</div>
+                    <div class="perf-bar-track">
+                      <div class="perf-bar-actual" style="width:60%"></div>
+                    </div>
+                    <div class="perf-bar-vals">$180 / $300</div>
+                  </div>
+                  <div class="perf-bar-row">
+                    <div class="perf-bar-label">Salary (Income)</div>
+                    <div class="perf-bar-track">
+                      <div class="perf-bar-actual" style="width:100%;background:#667EEA"></div>
+                    </div>
+                    <div class="perf-bar-vals" style="color:#667EEA">$8,450 / $8,000</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Category drill-down -->
+            <div class="card" style="margin-top:16px">
+              <div class="card-header">
+                <div><div class="card-title">Groceries — Transaction Detail</div><div class="card-sub">May 2026 · $1,980 of $2,500 budgeted</div></div>
+              </div>
+              <table class="txn-table">
+                <thead><tr><th>Date</th><th>Merchant</th><th>Amount</th></tr></thead>
+                <tbody>
+                  <tr><td>2026-05-30</td><td class="txn-name">Whole Foods Market</td><td class="txn-amount">-$94.20</td></tr>
+                  <tr><td>2026-05-27</td><td class="txn-name">Trader Joe's</td><td class="txn-amount">-$67.40</td></tr>
+                  <tr><td>2026-05-24</td><td class="txn-name">Costco Wholesale</td><td class="txn-amount">-$218.95</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SETTINGS VIEW
+     ══════════════════════════════════════════════════════ -->
+<section class="section-block" id="settings">
+  <div class="section-label">View</div>
+  <div class="section-title">Settings — Linked Accounts</div>
+  <div class="section-desc">Manage Plaid-linked institutions. Connect new accounts via Plaid Link. Each card shows institution name, account count, and last sync status.</div>
+
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="browser-dot red"></div><div class="browser-dot amber"></div><div class="browser-dot green"></div>
+      <div class="browser-url">chiiz.app/ → Linked Accounts</div>
+    </div>
+    <div class="browser-content">
+      <div class="app-shell">
+        <div class="sidebar">
+          <div class="sidebar-brand"><div class="sidebar-logo">C</div><div><div class="sidebar-brand-name">Chiiz</div><div class="sidebar-brand-sub">Smart budgeting</div></div></div>
+          <div class="sidebar-body">
+            <div class="sidebar-section-label">Main</div>
+            <button class="nav-item">Dashboard</button>
+            <button class="nav-item">Budget</button>
+            <button class="nav-item">Transactions <span class="nav-badge">4</span></button>
+            <button class="nav-item">Performance</button>
+            <div class="sidebar-gap"></div>
+            <div class="sidebar-section-label">Accounts</div>
+            <button class="nav-item active">Linked Accounts</button>
+          </div>
+        </div>
+        <div>
+          <div class="topnav">
+            <button class="btn btn-primary">+ Add Transaction</button>
+            <button class="btn btn-secondary">Sign out</button>
+          </div>
+          <div class="main-content">
+            <div style="margin-bottom:20px">
+              <div class="view-title">Linked Accounts</div>
+              <div class="view-sub">Manage your connected financial institutions via Plaid</div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-title">Connected Institutions</div>
+
+              <div class="institution-card">
+                <div class="institution-icon">🏦</div>
+                <div>
+                  <div class="institution-name">Chase Bank</div>
+                  <div class="institution-sub">3 accounts · Checking, Savings, Credit</div>
+                </div>
+                <div class="institution-status">
+                  <div class="status-dot">Synced · May 30</div>
+                </div>
+                <button class="btn btn-secondary" style="margin-left:8px;font-family:var(--font-body);font-size:13px">Manage</button>
+              </div>
+
+              <div class="institution-card">
+                <div class="institution-icon">💳</div>
+                <div>
+                  <div class="institution-name">American Express</div>
+                  <div class="institution-sub">1 account · Blue Cash Preferred</div>
+                </div>
+                <div class="institution-status">
+                  <div class="status-dot">Synced · May 30</div>
+                </div>
+                <button class="btn btn-secondary" style="margin-left:8px;font-family:var(--font-body);font-size:13px">Manage</button>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-title">Connect a new institution</div>
+              <div class="card" style="padding:24px;text-align:center;max-width:440px">
+                <div style="font-size:28px;margin-bottom:8px">🏛️</div>
+                <div class="card-title" style="margin-bottom:4px">Add a bank or credit card</div>
+                <div class="card-sub" style="margin-bottom:16px">Securely connect via Plaid. Supports 12,000+ US institutions.</div>
+                <button class="btn btn-primary" style="font-family:var(--font-body);font-size:14px">Connect with Plaid</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     UPLOAD DATA VIEW
+     ══════════════════════════════════════════════════════ -->
+<section class="section-block" id="upload">
+  <div class="section-label">View</div>
+  <div class="section-title">Upload Data</div>
+  <div class="section-desc">Import historical transactions from Excel/CSV. Category mapping step after upload. Used for pre-Plaid history.</div>
+
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="browser-dot red"></div><div class="browser-dot amber"></div><div class="browser-dot green"></div>
+      <div class="browser-url">chiiz.app/ → Upload Data</div>
+    </div>
+    <div class="browser-content">
+      <div class="app-shell">
+        <div class="sidebar">
+          <div class="sidebar-brand"><div class="sidebar-logo">C</div><div><div class="sidebar-brand-name">Chiiz</div><div class="sidebar-brand-sub">Smart budgeting</div></div></div>
+          <div class="sidebar-body">
+            <div class="sidebar-section-label">Main</div>
+            <button class="nav-item">Dashboard</button>
+            <button class="nav-item">Budget</button>
+            <button class="nav-item">Transactions</button>
+            <button class="nav-item">Performance</button>
+            <div class="sidebar-gap"></div>
+            <div class="sidebar-section-label">Data</div>
+            <button class="nav-item active">Upload Data</button>
+          </div>
+        </div>
+        <div>
+          <div class="topnav">
+            <button class="btn btn-primary">+ Add Transaction</button>
+            <button class="btn btn-secondary">Sign out</button>
+          </div>
+          <div class="main-content">
+            <div style="margin-bottom:20px">
+              <div class="view-title">Upload Data</div>
+              <div class="view-sub">Import historical transaction data from a spreadsheet</div>
+            </div>
+
+            <div style="max-width:560px">
+              <div class="upload-zone">
+                <div class="upload-icon">📤</div>
+                <div class="upload-title">Drop your Excel or CSV file here</div>
+                <div class="upload-sub">Supports .xlsx, .xls, .csv · Max 10 MB</div>
+                <button class="btn btn-primary">Browse files</button>
+              </div>
+
+              <div class="card" style="margin-top:16px;padding:20px">
+                <div class="card-title" style="margin-bottom:8px;font-size:1rem">Format requirements</div>
+                <ul style="font-family:var(--font-body);font-size:13px;color:var(--color-text-secondary);padding-left:20px;line-height:2">
+                  <li>Required columns: <strong>Date, Amount, Description</strong></li>
+                  <li>Optional: Category, Account, Notes</li>
+                  <li>Date format: MM/DD/YYYY or YYYY-MM-DD</li>
+                  <li>Amounts: positive = expense, negative = income (or vice versa)</li>
+                </ul>
+              </div>
+
+              <!-- Category mapping step (shown after file upload) -->
+              <div class="card" style="margin-top:16px">
+                <div class="card-header"><div class="card-title">Map columns</div><div class="card-sub">After file upload · Match spreadsheet columns to Chiiz fields</div></div>
+                <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-family:var(--font-body)">
+                    <span style="font-size:13px;color:var(--color-text-secondary)">Spreadsheet: <strong>Transaction Date</strong></span>
+                    <span style="font-size:13px;color:var(--color-text-muted)">→</span>
+                    <select class="filter-select"><option>Date</option></select>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-family:var(--font-body)">
+                    <span style="font-size:13px;color:var(--color-text-secondary)">Spreadsheet: <strong>Amount</strong></span>
+                    <span style="font-size:13px;color:var(--color-text-muted)">→</span>
+                    <select class="filter-select"><option>Amount</option></select>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-family:var(--font-body)">
+                    <span style="font-size:13px;color:var(--color-text-secondary)">Spreadsheet: <strong>Description</strong></span>
+                    <span style="font-size:13px;color:var(--color-text-muted)">→</span>
+                    <select class="filter-select"><option>Merchant / Name</option></select>
+                  </div>
+                </div>
+                <div class="card-footer" style="display:flex;justify-content:flex-end"><button class="btn btn-primary">Import 1,024 rows</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     ASK CHIIZ CHAT
+     ══════════════════════════════════════════════════════ -->
+<section class="section-block" id="askchiiz">
+  <div class="section-label">Component</div>
+  <div class="section-title">Ask Chiiz — AI Chat Overlay</div>
+  <div class="section-desc">Floating FAB available on all authenticated views. Opens a chat panel with context of the current month and selected account. Powered by GPT on the server.</div>
+
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="browser-dot red"></div><div class="browser-dot amber"></div><div class="browser-dot green"></div>
+      <div class="browser-url">chiiz.app/ — Ask Chiiz open</div>
+    </div>
+    <div class="browser-content" style="position:relative;min-height:440px;background:var(--color-bg);overflow:hidden">
+      <!-- Blurred dashboard background hint -->
+      <div style="padding:20px;opacity:.3;filter:blur(2px);pointer-events:none">
+        <div class="kstrip" style="margin-bottom:16px">
+          <div class="kstrip-cell"><div class="kstrip-label">Income</div><div class="kstrip-value pos">$8,450</div></div>
+          <div class="kstrip-cell"><div class="kstrip-label">Spending</div><div class="kstrip-value neutral">$5,230</div></div>
+          <div class="kstrip-cell"><div class="kstrip-label">Remaining</div><div class="kstrip-value pos">$1,370</div></div>
+          <div class="kstrip-cell"><div class="kstrip-label">Savings Rate</div><div class="kstrip-value pos">38%</div></div>
+        </div>
+      </div>
+
+      <!-- Chat panel -->
+      <div class="ask-chiiz-panel">
+        <div class="ask-header">
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--color-accent-light);display:flex;align-items:center;justify-content:center;font-size:14px">✦</div>
+          <div>
+            <div class="ask-header-title">Ask Chiiz</div>
+            <div class="ask-header-sub">May 2026 · All accounts</div>
+          </div>
+        </div>
+        <div class="ask-body">
+          <div class="ask-bubble ai">Hi! I'm Chiiz AI. Ask me anything about your spending this month.</div>
+          <div class="ask-bubble user">How am I doing on dining this month?</div>
+          <div class="ask-bubble ai">You've spent <strong>$380</strong> on Dining Out so far this month, which is 95% of your $400 budget. You have about <strong>$20 left</strong> — you're doing well but close to the limit!</div>
+        </div>
+        <div class="ask-input-row">
+          <input class="ask-input" placeholder="Ask about your spending…" />
+          <button class="ask-send">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- FAB -->
+      <div class="ask-chiiz-fab">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     APP SHELL / LAYOUT ANNOTATION
+     ══════════════════════════════════════════════════════ -->
+<section class="section-block">
+  <div class="section-label">Architecture</div>
+  <div class="section-title">Layout Anatomy</div>
+  <div class="section-desc">Desktop: 246px fixed sidebar + fluid main column. Mobile: sidebar hidden, top-nav hamburger opens MobileNavDrawer (slide-in overlay). Max content width 1320px centered.</div>
+
+  <div style="background:var(--color-bg);border-radius:12px;padding:24px;font-family:var(--font-body)">
+    <div style="display:grid;grid-template-columns:180px 1fr;border:2px dashed #2DCC8F44;border-radius:10px;overflow:hidden;font-size:12px">
+      <!-- Sidebar annotation -->
+      <div style="background:#D4F5E955;border-right:2px dashed #2DCC8F44;padding:16px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-weight:700;color:#1FA870;font-size:11px;letter-spacing:.08em;text-transform:uppercase">Sidebar</div>
+        <div style="color:#6B6B80">246px fixed width</div>
+        <div style="color:#6B6B80">Hidden on mobile</div>
+        <div style="color:#6B6B80">Brand logo mark</div>
+        <div style="color:#6B6B80">Nav items: Main / Accounts / Data sections</div>
+        <div style="color:#6B6B80">Active state: accent-light bg</div>
+        <div style="color:#6B6B80">Transactions badge (needs review count)</div>
+      </div>
+      <!-- Main column annotation -->
+      <div style="padding:16px;display:flex;flex-direction:column;gap:8px">
+        <div style="background:#F5A62322;border-radius:6px;padding:8px 12px;border:1px dashed #F5A62366">
+          <div style="font-weight:700;color:#92400E;font-size:11px;letter-spacing:.08em;text-transform:uppercase">TopNav</div>
+          <div style="color:#6B6B80;font-size:11px">Sticky · z-40 · Add Transaction + Sign Out buttons · Mobile hamburger icon</div>
+        </div>
+        <div style="background:#667EEA22;border-radius:6px;padding:8px 12px;border:1px dashed #667EEA66;flex:1">
+          <div style="font-weight:700;color:#667EEA;font-size:11px;letter-spacing:.08em;text-transform:uppercase">&lt;main&gt; — Current View</div>
+          <div style="color:#6B6B80;font-size:11px">px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-5</div>
+          <div style="color:#6B6B80;font-size:11px">Inner: max-w-[1320px] mx-auto</div>
+          <div style="margin-top:6px;color:#9090A8;font-size:11px">
+            dashboard | categories | transactions | performance | settings | upload
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overlays annotation -->
+    <div style="margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      <div style="background:#2DCC8F11;border:1px dashed #2DCC8F44;border-radius:8px;padding:12px">
+        <div style="font-weight:700;color:#1FA870;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">CategoryForm</div>
+        <div style="color:#6B6B80;font-size:11px">Modal · Add / edit a single category. Rendered via React portal. Backdrop click to close.</div>
+      </div>
+      <div style="background:#667EEA11;border:1px dashed #667EEA44;border-radius:8px;padding:12px">
+        <div style="font-weight:700;color:#667EEA;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">MobileNavDrawer</div>
+        <div style="color:#6B6B80;font-size:11px">Slide-in overlay · Mirrors Sidebar nav. Visible only on &lt;lg breakpoint.</div>
+      </div>
+      <div style="background:#F5A62311;border:1px dashed #F5A62344;border-radius:8px;padding:12px">
+        <div style="font-weight:700;color:#92400E;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">AskChiizChat</div>
+        <div style="color:#6B6B80;font-size:11px">Floating FAB + panel · Fixed position bottom-right. Available on all authenticated views.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /page -->
+
+<script>
+  // Highlight active TOC link on scroll
+  const links = document.querySelectorAll('.toc a');
+  const sections = document.querySelectorAll('section[id]');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const link = document.querySelector(`.toc a[href="#${entry.target.id}"]`);
+        if (link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

@@ -41,6 +41,15 @@ function monthKeyFromDate(value: string) {
   return `${year}-${month}`;
 }
 
+function isTransactionConfirmed(transaction: PlaidTransaction) {
+  const source = String(transaction.categorization_source || '').toLowerCase();
+  return Boolean(transaction.ignored_from_budget) || source === 'user';
+}
+
+function includeTransactionInActuals(transaction: PlaidTransaction) {
+  return !transaction.ignored_from_budget && isTransactionConfirmed(transaction);
+}
+
 function formatCurrencyCompact(value: number) {
   const abs = Math.abs(value);
   if (abs >= 1000000) {
@@ -208,15 +217,15 @@ export function PerformanceView({
     };
 
     for (const transaction of transactions) {
-      if (transaction.ignored_from_budget) {
-        continue;
-      }
-
       const monthKey = monthKeyFromDate(transaction.date);
       if (!monthKey) {
         continue;
       }
       const month = ensureMonth(monthKey);
+
+      if (!includeTransactionInActuals(transaction)) {
+        continue;
+      }
 
       const amount = Number(transaction.amount || 0);
       const categoryId = String(transaction.category_id || '').trim();

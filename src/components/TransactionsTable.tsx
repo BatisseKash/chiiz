@@ -33,6 +33,8 @@ type TransactionsTableProps = {
   reviewCount: number;
   confirmedCount: number;
   totalThisMonth: number;
+  confirmAllLoading: boolean;
+  onConfirmAll: () => Promise<void>;
   page: number;
   totalPages: number;
   pageSize: number;
@@ -114,6 +116,8 @@ export function TransactionsTable({
   reviewCount,
   confirmedCount,
   totalThisMonth,
+  confirmAllLoading,
+  onConfirmAll,
   page,
   totalPages,
   pageSize,
@@ -272,9 +276,9 @@ export function TransactionsTable({
 
     try {
       if (nextSelectionValue === IGNORE_OPTION_VALUE) {
-        await onChangeCategory(transaction.id, null, true);
+        await onChangeCategory(transaction.id, null, true, { refresh: false });
       } else {
-        await onChangeCategory(transaction.id, nextSelectionValue, false);
+        await onChangeCategory(transaction.id, nextSelectionValue, false, { refresh: false });
       }
     } finally {
       setConfirmingIds((current) => ({ ...current, [key]: false }));
@@ -599,8 +603,19 @@ export function TransactionsTable({
         </div>
 
         {activeTab === 'needs_review' ? (
-          <div className="rounded-[var(--radius-md)] border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            Choose a category, then confirm to move the transaction to Confirmed transactions.
+          <div className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+            <span>Choose a category, then confirm to move the transaction to Confirmed transactions.</span>
+            <Button
+              variant="secondary"
+              disabled={confirmAllLoading || reviewCount === 0}
+              onClick={() => {
+                void onConfirmAll();
+              }}
+              className="justify-center border-amber-300 bg-white px-3 py-1.5 text-xs text-amber-900 hover:bg-amber-100"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+              {confirmAllLoading ? 'Confirming...' : 'Confirm all'}
+            </Button>
           </div>
         ) : null}
       </div>

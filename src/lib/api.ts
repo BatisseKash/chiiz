@@ -267,6 +267,23 @@ export const overrideTransactionCategory = (
     body: JSON.stringify({ categoryId, ignored }),
   });
 
+export const confirmTransactionsForCurrentFilters = (payload: {
+  monthKey: string;
+  categoryId?: string;
+  categoryType?: 'income' | 'expense';
+  searchQuery?: string;
+}) =>
+  request<{
+    success: boolean;
+    confirmed_count: number;
+    skipped_uncategorized: number;
+    transaction_ids: string[];
+  }>('/api/transactions/confirm_all', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
 export const generateAiCategories = (payload?: { budgetId?: string; categorySetId?: string; month?: string }) =>
   request<{ suggestedCategories: Category[]; generatedCount: number }>(
     '/api/categories/suggestions/generate',

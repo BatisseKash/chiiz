@@ -55,6 +55,16 @@ type TransactionsViewProps = {
     ignored?: boolean,
     options?: { refresh?: boolean },
   ) => Promise<void>;
+  onConfirmTransactionsBulk: (payload: {
+    monthKey: string;
+    categoryId?: string;
+    categoryType?: 'income' | 'expense';
+    searchQuery?: string;
+  }) => Promise<{
+    confirmed_count: number;
+    skipped_uncategorized: number;
+    transaction_ids: string[];
+  }>;
   onNeedsReviewCountChange?: (count: number) => void;
 };
 
@@ -69,6 +79,7 @@ export function TransactionsView({
   onDeleteManualTransaction,
   onCategorizeTransactions,
   onChangeTransactionCategory,
+  onConfirmTransactionsBulk,
   onNeedsReviewCountChange,
 }: TransactionsViewProps) {
   const storedFilters = readStoredTransactionsFilters();
@@ -126,6 +137,7 @@ export function TransactionsView({
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState('');
   const [savingManual, setSavingManual] = useState(false);
+  const [confirmingAll, setConfirmingAll] = useState(false);
   const manualCategoryOptions = useMemo(
     () => categories.filter((category) => category.categoryType === transactionType),
     [categories, transactionType],
@@ -344,9 +356,51 @@ export function TransactionsView({
         transactions={pagedTransactions}
         categories={categories}
         onChangeCategory={async (transactionId, categoryId, ignored = false, options) => {
-          await onChangeTransactionCategory(transactionId, categoryId, ignored, options);
-          if (options?.refresh !== false) {
-            setReloadNonce((current) => current + 1);
+          const shouldOptimisticallyConfirm =
+            activeTab === 'needs_review' &&
+            options?.refresh === false &&
+            (ignored || Boolean(categoryId));
+
+          const previousTransaction = pagedTransactions.find(
+            (transaction) => transaction.id === transactionId,
+          );
+          const previousTransactionIndex = previousTransaction
+            ? pagedTransactions.indexOf(previousTransaction)
+            : -1;
+
+          if (shouldOptimisticallyConfirm) {
+            setPagedTransactions((current) =>
+              current.filter((transaction) => transaction.id !== transactionId),
+            );
+            setCounts((current) => ({
+              ...current,
+              needs_review: Math.max(0, current.needs_review - 1),
+              confirmed: current.confirmed + 1,
+            }));
+          }
+
+          try {
+            await onChangeTransactionCategory(transactionId, categoryId, ignored, options);
+            if (options?.refresh !== false) {
+              setReloadNonce((current) => current + 1);
+            }
+          } catch (error) {
+            if (shouldOptimisticallyConfirm && previousTransaction) {
+              setPagedTransactions((current) => {
+                if (current.some((transaction) => transaction.id === previousTransaction.id)) {
+                  return current;
+                }
+                const next = [...current];
+                next.splice(Math.max(0, previousTransactionIndex), 0, previousTransaction);
+                return next;
+              });
+              setCounts((current) => ({
+                ...current,
+                needs_review: current.needs_review + 1,
+                confirmed: Math.max(0, current.confirmed - 1),
+              }));
+            }
+            throw error;
           }
         }}
         loading={loading || tableLoading}
@@ -367,6 +421,37 @@ export function TransactionsView({
         reviewCount={counts.needs_review}
         confirmedCount={counts.confirmed}
         totalThisMonth={counts.total}
+        confirmAllLoading={confirmingAll}
+        onConfirmAll={async () => {
+          if (!monthFilter || activeTab !== 'needs_review' || confirmingAll) {
+            return;
+          }
+
+          setConfirmingAll(true);
+          try {
+            const result = await onConfirmTransactionsBulk({
+              monthKey: monthFilter,
+              categoryId: categoryFilter !== 'all' ? categoryFilter : undefined,
+              categoryType: categoryTypeFilter !== 'all' ? categoryTypeFilter : undefined,
+              searchQuery,
+            });
+
+            const confirmedIds = new Set(result.transaction_ids || []);
+            if (confirmedIds.size > 0) {
+              setPagedTransactions((current) =>
+                current.filter((transaction) => !confirmedIds.has(transaction.id)),
+              );
+              setCounts((current) => ({
+                ...current,
+                needs_review: Math.max(0, current.needs_review - result.confirmed_count),
+                confirmed: current.confirmed + result.confirmed_count,
+              }));
+            }
+          } finally {
+            setConfirmingAll(false);
+            setReloadNonce((current) => current + 1);
+          }
+        }}
         page={pageByTab[activeTab]}
         totalPages={totalPagesByTab[activeTab]}
         pageSize={rowsPerPage}

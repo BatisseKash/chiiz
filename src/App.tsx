@@ -8,6 +8,7 @@ import {
   askChiiz,
   assignBudgetMonths,
   categorizeTransactions,
+  confirmTransactionsForCurrentFilters,
   createBudget,
   createCategory,
   createManualTransaction,
@@ -82,6 +83,15 @@ function parseIsoDate(value: string) {
     return null;
   }
   return new Date(year, month - 1, day);
+}
+
+function isTransactionConfirmed(transaction: PlaidTransaction) {
+  const source = String(transaction.categorization_source || '').toLowerCase();
+  return Boolean(transaction.ignored_from_budget) || source === 'user';
+}
+
+function includeTransactionInActuals(transaction: PlaidTransaction) {
+  return !transaction.ignored_from_budget && isTransactionConfirmed(transaction);
 }
 
 function monthValueFromDate(date: Date) {
@@ -218,9 +228,15 @@ function App() {
         monthValues.add(row.monthKey);
       }
     }
+    for (const transaction of transactions) {
+      const monthKey = String(transaction.date || '').slice(0, 7);
+      if (/^\d{4}-\d{2}$/.test(monthKey)) {
+        monthValues.add(monthKey);
+      }
+    }
     const values = [...monthValues].sort((left, right) => (left < right ? 1 : -1));
     return values.map((value) => ({ value, label: monthLabelFromValue(value) }));
-  }, [unifiedMonthlyCategoryAmounts]);
+  }, [transactions, unifiedMonthlyCategoryAmounts]);
 
   const nettedUnifiedMonthlyCategoryAmounts = useMemo(
     () => applyGamblingMonthlyNetting(unifiedMonthlyCategoryAmounts),
@@ -402,7 +418,7 @@ function App() {
 
     return transactionsWithDate
       .filter(({ parsedDate, transaction }) => {
-        if (transaction.ignored_from_budget) {
+        if (!includeTransactionInActuals(transaction)) {
           return false;
         }
         const transactionTs = parsedDate!.getTime();
@@ -713,7 +729,7 @@ function App() {
         actual: transactions
           .filter(
             (transaction) =>
-              !transaction.ignored_from_budget && transaction.category_id === category.id,
+              includeTransactionInActuals(transaction) && transaction.category_id === category.id,
           )
           .reduce((sum, transaction) => {
             const amount = Number(transaction.amount || 0);
@@ -1350,10 +1366,62 @@ function App() {
               await overrideTransactionCategory(transactionId, categoryId, ignored);
               if (options?.refresh !== false) {
                 await refreshPlaidState();
+              } else {
+                const selectedCategory = categoryId
+                  ? categories.find((category) => category.id === categoryId) || null
+                  : null;
+                setTransactions((current) =>
+                  current.map((transaction) =>
+                    transaction.id === transactionId
+                      ? {
+                          ...transaction,
+                          category_id: ignored ? null : categoryId,
+                          category_name: ignored ? null : selectedCategory?.name || transaction.category_name,
+                          category_type:
+                            ignored ? null : selectedCategory?.categoryType || transaction.category_type,
+                          categorization_source: ignored || categoryId ? 'user' : 'needs_review',
+                          categorization_confidence: ignored || categoryId ? 1 : 0,
+                          ignored_from_budget: ignored,
+                        }
+                      : transaction,
+                  ),
+                );
               }
             } catch (error) {
               const message =
                 error instanceof Error ? error.message : 'Failed to update the transaction category.';
+              setPlaidStatus(message);
+              throw error;
+            }
+          }}
+          onConfirmTransactionsBulk={async (payload) => {
+            try {
+              const result = await confirmTransactionsForCurrentFilters(payload);
+              const confirmedIds = new Set(result.transaction_ids || []);
+              if (confirmedIds.size > 0) {
+                setTransactions((current) =>
+                  current.map((transaction) =>
+                    confirmedIds.has(transaction.id)
+                      ? {
+                          ...transaction,
+                          categorization_source: 'user',
+                          categorization_confidence: 1,
+                          ignored_from_budget: false,
+                        }
+                      : transaction,
+                  ),
+                );
+              }
+
+              const skippedText =
+                result.skipped_uncategorized > 0
+                  ? ` Skipped ${result.skipped_uncategorized} without a category.`
+                  : '';
+              setPlaidStatus(`Confirmed ${result.confirmed_count} transactions.${skippedText}`);
+              return result;
+            } catch (error) {
+              const message =
+                error instanceof Error ? error.message : 'Failed to confirm transactions.';
               setPlaidStatus(message);
               throw error;
             }
