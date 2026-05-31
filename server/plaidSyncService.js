@@ -1,3 +1,5 @@
+const crypto = require('crypto');
+
 function createPlaidSyncService({
   plaidClient,
   supabaseRequest,
@@ -15,6 +17,64 @@ function createPlaidSyncService({
       .replace(/&/g, 'and')
       .replace(/[^a-z0-9]+/g, ' ')
       .trim();
+  }
+
+  function hashDedupeValue(value) {
+    return crypto.createHash('sha256').update(value).digest('hex').slice(0, 32);
+  }
+
+  function transactionDedupeKey({ userId, accountId, transaction }) {
+    const stableTransactionId = String(transaction.transaction_id || '').trim();
+    if (stableTransactionId) {
+      return `plaid:${userId}:${stableTransactionId}`;
+    }
+
+    // Plaid normally sends transaction_id. This fallback protects any legacy or
+    // partial import that lacks it by matching the same account/date/amount/name.
+    const parts = [
+      userId,
+      accountId || '',
+      transaction.date || '',
+      Number(transaction.amount || 0).toFixed(2),
+      normalizeMerchantName(transaction),
+      transaction.name || '',
+      transaction.pending ? 'pending' : 'posted',
+    ];
+    return `fallback:${hashDedupeValue(parts.join('|'))}`;
+  }
+
+  function transactionFingerprint({ accountId, transaction }) {
+    return [
+      accountId || '',
+      transaction.date || '',
+      Number(transaction.amount || 0).toFixed(2),
+      normalizeMerchantName(transaction),
+      normalizeMerchantName({ merchant_name: transaction.name || '' }),
+      transaction.pending ? 'pending' : 'posted',
+    ].join('|');
+  }
+
+  function storedTransactionFingerprint(row) {
+    return [
+      row.account_id || '',
+      row.date || '',
+      Number(row.amount || 0).toFixed(2),
+      row.normalized_merchant_name || normalizeMerchantName(row),
+      normalizeMerchantName({ merchant_name: row.transaction_name || '' }),
+      'posted',
+    ].join('|');
+  }
+
+  function storedPlaidTransactionId({ userId, accountId, transaction }) {
+    const stableTransactionId = String(transaction.transaction_id || '').trim();
+    if (stableTransactionId) {
+      return stableTransactionId;
+    }
+    return transactionDedupeKey({ userId, accountId, transaction });
+  }
+
+  function postgrestInList(values) {
+    return `in.(${values.map((value) => `"${String(value).replace(/"/g, '\\"')}"`).join(',')})`;
   }
 
   function serializeSyncError(error) {
@@ -55,29 +115,75 @@ function createPlaidSyncService({
       access_token: accessToken,
     });
 
-    const accountPayload = accountsResponse.data.accounts.map((account) => ({
-      user_id: userId,
-      plaid_item_id: plaidItem.id,
-      plaid_account_id: account.account_id,
-      account_name: account.name,
-      account_type: [account.type, account.subtype].filter(Boolean).join(':') || account.type || 'other',
-    }));
+    const accountPayload = accountsResponse.data.accounts
+      .filter((account) => account.account_id)
+      .map((account) => ({
+        user_id: userId,
+        plaid_item_id: plaidItem.id,
+        plaid_account_id: account.account_id,
+        account_name: account.name,
+        account_type: [account.type, account.subtype].filter(Boolean).join(':') || account.type || 'other',
+      }));
 
-    if (accountPayload.length > 0) {
-      await supabaseRequest('/rest/v1/accounts?on_conflict=plaid_account_id', {
-        method: 'POST',
-        headers: {
-          Prefer: 'resolution=merge-duplicates,return=representation',
-        },
-        body: JSON.stringify(accountPayload),
+    const plaidAccountIds = accountPayload.map((account) => account.plaid_account_id);
+    const existingByPlaidAccountId = new Map();
+
+    if (plaidAccountIds.length > 0) {
+      const existingParams = new URLSearchParams({
+        select: 'id,plaid_account_id',
+        user_id: `eq.${userId}`,
+        plaid_account_id: postgrestInList(plaidAccountIds),
+        order: 'created_at.asc',
       });
+      const existingAccounts = await supabaseRequest(
+        `/rest/v1/accounts?${existingParams.toString()}`,
+        { method: 'GET' },
+      );
+
+      for (const account of existingAccounts) {
+        if (!existingByPlaidAccountId.has(account.plaid_account_id)) {
+          existingByPlaidAccountId.set(account.plaid_account_id, account);
+        }
+      }
+
+      for (const account of accountPayload) {
+        const existing = existingByPlaidAccountId.get(account.plaid_account_id);
+        if (existing) {
+          // Account identity is the stable Plaid account_id scoped to this
+          // user. When the same Chase card appears through a new Plaid Item,
+          // update the original Chiiz account instead of inserting a duplicate.
+          await supabaseRequest(
+            `/rest/v1/accounts?${new URLSearchParams({
+              id: `eq.${existing.id}`,
+              user_id: `eq.${userId}`,
+            }).toString()}`,
+            {
+              method: 'PATCH',
+              headers: { Prefer: 'return=minimal' },
+              body: JSON.stringify({
+                plaid_item_id: account.plaid_item_id,
+                account_name: account.account_name,
+                account_type: account.account_type,
+              }),
+            },
+          );
+        } else {
+          await supabaseRequest('/rest/v1/accounts', {
+            method: 'POST',
+            headers: { Prefer: 'return=minimal' },
+            body: JSON.stringify([account]),
+          });
+        }
+      }
     }
 
     const accountParams = new URLSearchParams({
       select: 'id,plaid_account_id,account_name,account_type,plaid_item_id',
       user_id: `eq.${userId}`,
-      plaid_item_id: `eq.${plaidItem.id}`,
     });
+    if (plaidAccountIds.length) {
+      accountParams.set('plaid_account_id', postgrestInList(plaidAccountIds));
+    }
 
     const localAccounts = await supabaseRequest(`/rest/v1/accounts?${accountParams.toString()}`, {
       method: 'GET',
@@ -95,7 +201,7 @@ function createPlaidSyncService({
   }
 
   async function upsertTransactions({ userId, plaidItem, transactions, accountMap }) {
-    const payload = transactions
+    const preparedPayload = transactions
       .map((transaction) => {
         const localAccount = accountMap.get(transaction.account_id);
 
@@ -104,9 +210,17 @@ function createPlaidSyncService({
         }
 
         return {
+          dedupe_fingerprint: transactionFingerprint({
+            accountId: localAccount.id,
+            transaction,
+          }),
           user_id: userId,
           account_id: localAccount.id,
-          plaid_transaction_id: transaction.transaction_id,
+          plaid_transaction_id: storedPlaidTransactionId({
+            userId,
+            accountId: localAccount.id,
+            transaction,
+          }),
           institution_name: plaidItem.institution_name,
           transaction_name: transaction.name || null,
           merchant_name:
@@ -124,18 +238,91 @@ function createPlaidSyncService({
         };
       })
       .filter(Boolean);
+    const payloadByTransactionId = new Map();
+    for (const row of preparedPayload) {
+      payloadByTransactionId.set(row.plaid_transaction_id, row);
+    }
+    const payload = [...payloadByTransactionId.values()];
 
     if (payload.length === 0) {
       return 0;
     }
 
-    await supabaseRequest('/rest/v1/transactions?on_conflict=plaid_transaction_id', {
-      method: 'POST',
-      headers: {
-        Prefer: 'resolution=merge-duplicates,return=minimal',
-      },
-      body: JSON.stringify(payload),
+    const transactionIds = payload.map((transaction) => transaction.plaid_transaction_id);
+    const existingParams = new URLSearchParams({
+      select: 'id,plaid_transaction_id',
+      user_id: `eq.${userId}`,
+      plaid_transaction_id: postgrestInList(transactionIds),
+      order: 'created_at.asc',
     });
+    const existingRows = await supabaseRequest(
+      `/rest/v1/transactions?${existingParams.toString()}`,
+      { method: 'GET' },
+    );
+    const existingByPlaidTransactionId = new Map();
+    for (const row of existingRows) {
+      if (!existingByPlaidTransactionId.has(row.plaid_transaction_id)) {
+        existingByPlaidTransactionId.set(row.plaid_transaction_id, row);
+      }
+    }
+
+    const accountIds = [...new Set(payload.map((transaction) => transaction.account_id).filter(Boolean))];
+    const dates = [...new Set(payload.map((transaction) => transaction.date).filter(Boolean))];
+    const existingByFingerprint = new Map();
+    if (accountIds.length && dates.length) {
+      const fingerprintParams = new URLSearchParams({
+        select:
+          'id,plaid_transaction_id,account_id,date,amount,merchant_name,transaction_name,normalized_merchant_name,created_at',
+        user_id: `eq.${userId}`,
+        account_id: postgrestInList(accountIds),
+        date: postgrestInList(dates),
+        order: 'created_at.asc',
+      });
+      const fingerprintRows = await supabaseRequest(
+        `/rest/v1/transactions?${fingerprintParams.toString()}`,
+        { method: 'GET' },
+      );
+      for (const row of fingerprintRows) {
+        const fingerprint = storedTransactionFingerprint(row);
+        if (!existingByFingerprint.has(fingerprint)) {
+          existingByFingerprint.set(fingerprint, row);
+        }
+      }
+    }
+
+    const inserts = [];
+    for (const transaction of payload) {
+      const existing =
+        existingByPlaidTransactionId.get(transaction.plaid_transaction_id) ||
+        existingByFingerprint.get(transaction.dedupe_fingerprint);
+      const { dedupe_fingerprint: _dedupeFingerprint, ...storedTransaction } = transaction;
+      if (existing) {
+        // Plaid transaction_id is the primary identity. The fingerprint catches
+        // relinked accounts where Plaid issues a different id for the same
+        // posted charge. Keep the original row id so budgets and overrides stay.
+        await supabaseRequest(
+          `/rest/v1/transactions?${new URLSearchParams({
+            id: `eq.${existing.id}`,
+            user_id: `eq.${userId}`,
+          }).toString()}`,
+          {
+            method: 'PATCH',
+            headers: { Prefer: 'return=minimal' },
+            body: JSON.stringify(storedTransaction),
+          },
+        );
+      } else {
+        inserts.push(storedTransaction);
+      }
+    }
+
+    if (inserts.length) {
+      await supabaseRequest('/rest/v1/transactions', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify(inserts),
+      });
+    }
 
     return payload.length;
   }
