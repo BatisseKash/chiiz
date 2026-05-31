@@ -189,6 +189,7 @@ function App() {
   const [dashboardAccount, setDashboardAccount] = useState('all');
   const [dashboardCategory, setDashboardCategory] = useState('all');
   const [dashboardTransactionType, setDashboardTransactionType] = useState<TransactionTypeFilter>('all');
+  const [transactionsNeedsReviewCount, setTransactionsNeedsReviewCount] = useState(0);
 
   const transactionsWithDate = useMemo(
     () =>
@@ -342,24 +343,6 @@ function App() {
     }
     return monthValueFromDate(new Date());
   }, [dashboardSelectedMonths, monthOptions]);
-
-  const needsReviewCount = useMemo(() => {
-    const isConfirmedTransaction = (transaction: PlaidTransaction) => {
-      const source = String(transaction.categorization_source || '').toLowerCase();
-      const sourceIsConfirmed =
-        source === 'user' || source === 'rule' || source === 'mapped' || source === 'ai';
-      return (
-        Boolean(transaction.ignored_from_budget) ||
-        Boolean(transaction.category_id) ||
-        sourceIsConfirmed
-      );
-    };
-
-    return transactions.reduce(
-      (count, transaction) => (isConfirmedTransaction(transaction) ? count : count + 1),
-      0,
-    );
-  }, [transactions]);
 
   const dashboardRange = useMemo(
     () => getDashboardRange(dashboardTimePreset, dashboardSelectedMonths, dashboardYear, monthOptions),
@@ -1357,10 +1340,17 @@ function App() {
               setPlaidStatus(summaryText);
             })
           }
-          onChangeTransactionCategory={async (transactionId, categoryId, ignored = false) => {
+          onChangeTransactionCategory={async (
+            transactionId,
+            categoryId,
+            ignored = false,
+            options?: { refresh?: boolean },
+          ) => {
             try {
               await overrideTransactionCategory(transactionId, categoryId, ignored);
-              await refreshPlaidState();
+              if (options?.refresh !== false) {
+                await refreshPlaidState();
+              }
             } catch (error) {
               const message =
                 error instanceof Error ? error.message : 'Failed to update the transaction category.';
@@ -1368,6 +1358,7 @@ function App() {
               throw error;
             }
           }}
+          onNeedsReviewCountChange={setTransactionsNeedsReviewCount}
         />
       );
     }
@@ -1440,7 +1431,7 @@ function App() {
       <Sidebar
         activeView={activeView}
         onSelect={setActiveView}
-        needsReviewCount={needsReviewCount}
+        needsReviewCount={transactionsNeedsReviewCount}
       />
 
       <div className="min-w-0">

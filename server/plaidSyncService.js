@@ -77,6 +77,12 @@ function createPlaidSyncService({
     return `in.(${values.map((value) => `"${String(value).replace(/"/g, '\\"')}"`).join(',')})`;
   }
 
+  function accountDisplayName(account) {
+    const label = String(account.official_name || account.name || '').trim() || 'Unnamed account';
+    const mask = String(account.mask || '').trim();
+    return mask ? `${label} ••••${mask}` : label;
+  }
+
   function serializeSyncError(error) {
     const plaidError = error.response?.data;
 
@@ -121,7 +127,7 @@ function createPlaidSyncService({
         user_id: userId,
         plaid_item_id: plaidItem.id,
         plaid_account_id: account.account_id,
-        account_name: account.name,
+        account_name: accountDisplayName(account),
         account_type: [account.type, account.subtype].filter(Boolean).join(':') || account.type || 'other',
       }));
 

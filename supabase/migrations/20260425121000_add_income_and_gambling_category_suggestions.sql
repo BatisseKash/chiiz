@@ -5,6 +5,6 @@ values
   (null, 'Scholarship / Fellowship', 'income', true),
   (null, 'Gifts & Prizes', 'income', true),
   (null, 'Other', 'income', true),
-  (null, 'Gamblings', 'income', true),
-  (null, 'Gamblings', 'expense', true)
+  (null, 'Gambling Winning', 'income', true),
+  (null, 'Gambling', 'expense', true)
 on conflict do nothing;

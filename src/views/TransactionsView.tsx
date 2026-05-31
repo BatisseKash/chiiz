@@ -53,7 +53,9 @@ type TransactionsViewProps = {
     transactionId: string,
     categoryId: string | null,
     ignored?: boolean,
+    options?: { refresh?: boolean },
   ) => Promise<void>;
+  onNeedsReviewCountChange?: (count: number) => void;
 };
 
 export function TransactionsView({
@@ -67,13 +69,14 @@ export function TransactionsView({
   onDeleteManualTransaction,
   onCategorizeTransactions,
   onChangeTransactionCategory,
+  onNeedsReviewCountChange,
 }: TransactionsViewProps) {
   const storedFilters = readStoredTransactionsFilters();
   const isConfirmedTransaction = (transaction: PlaidTransaction) => {
     const source = String(transaction.categorization_source || '').toLowerCase();
-    const sourceIsConfirmed =
-      source === 'user' || source === 'rule' || source === 'mapped' || source === 'ai';
-    return Boolean(transaction.ignored_from_budget) || Boolean(transaction.category_id) || sourceIsConfirmed;
+    // AI/rule/mapped categories are suggestions. A transaction is only
+    // confirmed after the user explicitly confirms it or ignores it.
+    return Boolean(transaction.ignored_from_budget) || source === 'user';
   };
 
   const [activeTab, setActiveTab] = useState<ReviewTab>(
@@ -331,14 +334,20 @@ export function TransactionsView({
     };
   }, [activeTab, monthFilter, pageByTab, reloadNonce, rowsPerPage, categoryFilter, categoryTypeFilter]);
 
+  useEffect(() => {
+    onNeedsReviewCountChange?.(counts.needs_review);
+  }, [counts.needs_review, onNeedsReviewCountChange]);
+
   return (
     <div>
       <TransactionsTable
         transactions={pagedTransactions}
         categories={categories}
-        onChangeCategory={async (transactionId, categoryId, ignored = false) => {
-          await onChangeTransactionCategory(transactionId, categoryId, ignored);
-          setReloadNonce((current) => current + 1);
+        onChangeCategory={async (transactionId, categoryId, ignored = false, options) => {
+          await onChangeTransactionCategory(transactionId, categoryId, ignored, options);
+          if (options?.refresh !== false) {
+            setReloadNonce((current) => current + 1);
+          }
         }}
         loading={loading || tableLoading}
         onCategorizeTransactions={onCategorizeTransactions}

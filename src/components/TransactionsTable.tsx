@@ -13,6 +13,7 @@ type TransactionsTableProps = {
     transactionId: string,
     categoryId: string | null,
     ignored?: boolean,
+    options?: { refresh?: boolean },
   ) => Promise<void>;
   loading: boolean;
   onCategorizeTransactions: () => void;
@@ -194,7 +195,10 @@ export function TransactionsTable({
 
     return rows.filter((transaction) => {
       const effectiveCategoryId = getEffectiveSelectionValue(transaction);
-      if (selectedCategory !== 'all' && effectiveCategoryId !== selectedCategory) {
+      const filterCategoryId = transaction.ignored_from_budget
+        ? IGNORE_OPTION_VALUE
+        : transaction.category_id || '';
+      if (selectedCategory !== 'all' && filterCategoryId !== selectedCategory) {
         return false;
       }
 
@@ -314,9 +318,6 @@ export function TransactionsTable({
         <tr key={transaction.transaction_id} className="transition-colors hover:bg-[var(--color-surface-alt)]">
           <td className="px-4 py-3.5">
             <p className="font-medium text-[var(--color-text-primary)]">{merchantName(transaction)}</p>
-            {transaction.categorization_reason ? (
-              <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{transaction.categorization_reason}</p>
-            ) : null}
           </td>
           <td className="px-4 py-3.5">
             <div className="min-w-[160px]">
@@ -410,9 +411,6 @@ export function TransactionsTable({
         <tr key={transaction.transaction_id} className="transition-colors hover:bg-[var(--color-surface-alt)]">
           <td className="px-4 py-3.5">
             <p className="font-medium text-[var(--color-text-primary)]">{merchantName(transaction)}</p>
-            {transaction.categorization_reason ? (
-              <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{transaction.categorization_reason}</p>
-            ) : null}
           </td>
           <td className="px-4 py-3.5">
             <div className="min-w-[160px]">
@@ -439,6 +437,7 @@ export function TransactionsTable({
                     transaction.id,
                     value && value !== IGNORE_OPTION_VALUE ? value : null,
                     value === IGNORE_OPTION_VALUE,
+                    value ? { refresh: false } : undefined,
                   );
                 }}
                 className="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-light)]"
@@ -661,11 +660,6 @@ export function TransactionsTable({
                   <p className="text-[18px] font-bold leading-tight text-[var(--color-text-primary)]">
                     {merchantName(transaction)}
                   </p>
-                  {transaction.categorization_reason ? (
-                    <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                      {transaction.categorization_reason}
-                    </p>
-                  ) : null}
                   <p className="mt-2 text-sm font-semibold text-[var(--color-text-muted)]">
                     {transaction.date}
                     <span className="mx-2">•</span>
@@ -756,6 +750,7 @@ export function TransactionsTable({
                             transaction.id,
                             value && value !== IGNORE_OPTION_VALUE ? value : null,
                             value === IGNORE_OPTION_VALUE,
+                            value ? { refresh: false } : undefined,
                           );
                         }}
                         className="mt-2 h-12 w-full rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 text-base font-medium text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-light)]"

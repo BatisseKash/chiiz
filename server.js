@@ -3126,7 +3126,9 @@ app.post('/api/transactions/manual', requireAuth, async (req, res) => {
       }
     }
 
-    let storedAmount = transactionType === 'income' ? -Math.abs(amountValue) : Math.abs(amountValue);
+    // Preserve the sign for manual expenses so a user-entered negative expense
+    // acts as a category credit/refund and reduces that category's spend.
+    let storedAmount = transactionType === 'income' ? -Math.abs(amountValue) : amountValue;
     let categoryRecord = null;
     if (categoryId) {
       categoryRecord = await fetchCategoryById(req.userId, categoryId);
@@ -3135,6 +3137,8 @@ app.post('/api/transactions/manual', requireAuth, async (req, res) => {
       }
       if (categoryRecord.category_type === 'income') {
         storedAmount = -Math.abs(amountValue);
+      } else {
+        storedAmount = amountValue;
       }
     }
 
@@ -3346,9 +3350,9 @@ app.get('/api/transactions', requireAuth, async (req, res) => {
       : formattedRows;
     const isConfirmedTransaction = (transaction) => {
       const source = String(transaction.categorization_source || '').toLowerCase();
-      const sourceIsConfirmed =
-        source === 'user' || source === 'rule' || source === 'mapped' || source === 'ai';
-      return Boolean(transaction.ignored_from_budget) || Boolean(transaction.category_id) || sourceIsConfirmed;
+      // AI/rule/mapped categories are suggestions. Keep them in Needs Review
+      // until the user confirms, which rewrites categorization_source to "user".
+      return Boolean(transaction.ignored_from_budget) || source === 'user';
     };
 
     const confirmedRows = categoryFilteredRows.filter(isConfirmedTransaction);
