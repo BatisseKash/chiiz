@@ -250,16 +250,24 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
   const [savingHistoryRows, setSavingHistoryRows] = useState(false);
 
   const loadNetWorth = async () => {
-    const [summaryResult, accountsResult, historyResult, accountMonthsResult] = await Promise.all([
+    const [summaryResult, historyResult, accountMonthsResult] = await Promise.all([
       fetchNetWorthSummary(),
-      fetchNetWorthAccounts(selectedAccountMonth ? { month: selectedAccountMonth } : undefined),
       fetchNetWorthHistory(),
       fetchNetWorthAccountMonths(),
     ]);
+    const months = accountMonthsResult.months || [];
+    const accountMonth = selectedAccountMonth && months.includes(selectedAccountMonth)
+      ? selectedAccountMonth
+      : months[0] || '';
+    const accountsResult = await fetchNetWorthAccounts(
+      accountMonth ? { month: accountMonth } : undefined,
+    );
+
     setSummary(summaryResult);
     setAccounts(accountsResult.accounts || []);
     setHistory(historyResult.snapshots || []);
-    setAccountMonths(accountMonthsResult.months || []);
+    setAccountMonths(months);
+    setSelectedAccountMonth(accountMonth);
   };
 
   useEffect(() => {
@@ -268,19 +276,27 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
       try {
         setLoading(true);
         setError(null);
-        const [summaryResult, accountsResult, historyResult, accountMonthsResult] = await Promise.all([
+        const [summaryResult, historyResult, accountMonthsResult] = await Promise.all([
           fetchNetWorthSummary(),
-          fetchNetWorthAccounts(),
           fetchNetWorthHistory(),
           fetchNetWorthAccountMonths(),
         ]);
         if (cancelled) {
           return;
         }
+        const months = accountMonthsResult.months || [];
+        const accountMonth = months[0] || '';
+        const accountsResult = await fetchNetWorthAccounts(
+          accountMonth ? { month: accountMonth } : undefined,
+        );
+        if (cancelled) {
+          return;
+        }
         setSummary(summaryResult);
         setAccounts(accountsResult.accounts || []);
         setHistory(historyResult.snapshots || []);
-        setAccountMonths(accountMonthsResult.months || []);
+        setAccountMonths(months);
+        setSelectedAccountMonth(accountMonth);
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : 'Failed to load net worth.');
@@ -677,7 +693,7 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
               <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
                 {selectedAccountMonth
                   ? `Showing latest account snapshot for ${formatDateLabel(`${selectedAccountMonth}-01`)}`
-                  : 'Showing current synced balances'}
+                  : 'Account month snapshots will appear after the next balance sync'}
               </p>
             </div>
             <label className="flex min-w-[220px] flex-col gap-1.5">
@@ -687,15 +703,18 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
               <select
                 value={selectedAccountMonth}
                 onChange={(event) => void loadAccountsForMonth(event.target.value)}
-                disabled={loadingAccounts}
+                disabled={loadingAccounts || accountMonths.length === 0}
                 className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-light)] disabled:cursor-wait disabled:opacity-70"
               >
-                <option value="">Current balances</option>
-                {accountMonths.map((month) => (
-                  <option key={month} value={month}>
-                    {formatDateLabel(`${month}-01`)}
-                  </option>
-                ))}
+                {accountMonths.length ? (
+                  accountMonths.map((month) => (
+                    <option key={month} value={month}>
+                      {formatDateLabel(`${month}-01`)}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">No monthly snapshots</option>
+                )}
               </select>
             </label>
           </div>
