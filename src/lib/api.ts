@@ -195,8 +195,18 @@ export const fetchLinkedAccounts = () =>
   );
 export const fetchNetWorthSummary = () =>
   request<NetWorthSummary>('/api/net-worth/summary');
-export const fetchNetWorthAccounts = () =>
-  request<{ accounts: NetWorthAccount[] }>('/api/net-worth/accounts');
+export const fetchNetWorthAccounts = (params?: { month?: string | null }) => {
+  const search = new URLSearchParams();
+  if (params?.month) {
+    search.set('month', params.month);
+  }
+  const qs = search.toString();
+  return request<{ accounts: NetWorthAccount[]; month?: string | null }>(
+    `/api/net-worth/accounts${qs ? `?${qs}` : ''}`,
+  );
+};
+export const fetchNetWorthAccountMonths = () =>
+  request<{ months: string[] }>('/api/net-worth/account-months');
 export const fetchNetWorthHistory = () =>
   request<{ snapshots: NetWorthSnapshot[] }>('/api/net-worth/history');
 export const addNetWorthHistorySnapshots = (payload: {

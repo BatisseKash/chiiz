@@ -11,6 +11,7 @@ import {
 import {
   addNetWorthHistorySnapshots,
   createManualNetWorthAccount,
+  fetchNetWorthAccountMonths,
   fetchNetWorthAccounts,
   fetchNetWorthHistory,
   fetchNetWorthSummary,
@@ -234,6 +235,9 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [summary, setSummary] = useState<NetWorthSummary>(EMPTY_SUMMARY);
   const [accounts, setAccounts] = useState<NetWorthAccount[]>([]);
+  const [accountMonths, setAccountMonths] = useState<string[]>([]);
+  const [selectedAccountMonth, setSelectedAccountMonth] = useState('');
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [history, setHistory] = useState<NetWorthSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -246,14 +250,16 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
   const [savingHistoryRows, setSavingHistoryRows] = useState(false);
 
   const loadNetWorth = async () => {
-    const [summaryResult, accountsResult, historyResult] = await Promise.all([
+    const [summaryResult, accountsResult, historyResult, accountMonthsResult] = await Promise.all([
       fetchNetWorthSummary(),
-      fetchNetWorthAccounts(),
+      fetchNetWorthAccounts(selectedAccountMonth ? { month: selectedAccountMonth } : undefined),
       fetchNetWorthHistory(),
+      fetchNetWorthAccountMonths(),
     ]);
     setSummary(summaryResult);
     setAccounts(accountsResult.accounts || []);
     setHistory(historyResult.snapshots || []);
+    setAccountMonths(accountMonthsResult.months || []);
   };
 
   useEffect(() => {
@@ -262,10 +268,11 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
       try {
         setLoading(true);
         setError(null);
-        const [summaryResult, accountsResult, historyResult] = await Promise.all([
+        const [summaryResult, accountsResult, historyResult, accountMonthsResult] = await Promise.all([
           fetchNetWorthSummary(),
           fetchNetWorthAccounts(),
           fetchNetWorthHistory(),
+          fetchNetWorthAccountMonths(),
         ]);
         if (cancelled) {
           return;
@@ -273,6 +280,7 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
         setSummary(summaryResult);
         setAccounts(accountsResult.accounts || []);
         setHistory(historyResult.snapshots || []);
+        setAccountMonths(accountMonthsResult.months || []);
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : 'Failed to load net worth.');
@@ -288,6 +296,20 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
       cancelled = true;
     };
   }, []);
+
+  const loadAccountsForMonth = async (month: string) => {
+    setSelectedAccountMonth(month);
+    setLoadingAccounts(true);
+    setError(null);
+    try {
+      const accountsResult = await fetchNetWorthAccounts(month ? { month } : undefined);
+      setAccounts(accountsResult.accounts || []);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load account balances.');
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
 
   const openManualAccountModal = (account?: NetWorthAccount) => {
     if (account) {
@@ -403,6 +425,14 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
   const liabilities = useMemo(
     () => accounts.filter((account) => account.type === 'liability'),
     [accounts],
+  );
+  const accountAssetTotal = useMemo(
+    () => assets.reduce((sum, account) => sum + Math.abs(Number(account.balance || 0)), 0),
+    [assets],
+  );
+  const accountLiabilityTotal = useMemo(
+    () => liabilities.reduce((sum, account) => sum + Math.abs(Number(account.balance || 0)), 0),
+    [liabilities],
   );
   const hasBalances = summary.has_balances && accounts.length > 0;
 
@@ -639,9 +669,40 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
 
       {activeTab === 'accounts' ? (
         <div className="space-y-5">
+          <div className="flex flex-col gap-3 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-display text-[1.35rem] font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">
+                Account Balances
+              </p>
+              <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
+                {selectedAccountMonth
+                  ? `Showing latest account snapshot for ${formatDateLabel(`${selectedAccountMonth}-01`)}`
+                  : 'Showing current synced balances'}
+              </p>
+            </div>
+            <label className="flex min-w-[220px] flex-col gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+                Month
+              </span>
+              <select
+                value={selectedAccountMonth}
+                onChange={(event) => void loadAccountsForMonth(event.target.value)}
+                disabled={loadingAccounts}
+                className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface-alt)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-light)] disabled:cursor-wait disabled:opacity-70"
+              >
+                <option value="">Current balances</option>
+                {accountMonths.map((month) => (
+                  <option key={month} value={month}>
+                    {formatDateLabel(`${month}-01`)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           <div>
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]">
-              Assets - {fmt(summary.total_assets)} total
+              Assets - {fmt(accountAssetTotal)} total
             </p>
             <div className="overflow-hidden rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)]">
               <div className="px-5 py-1">
@@ -651,16 +712,18 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
                       key={account.id}
                       account={account}
                       pct={
-                        summary.total_assets > 0
-                          ? Math.round((Math.abs(Number(account.balance || 0)) / summary.total_assets) * 1000) / 10
+                        accountAssetTotal > 0
+                          ? Math.round((Math.abs(Number(account.balance || 0)) / accountAssetTotal) * 1000) / 10
                           : 0
                       }
                       color={assetColors[index % assetColors.length]}
-                      onEdit={openManualAccountModal}
+                      onEdit={selectedAccountMonth ? undefined : openManualAccountModal}
                     />
                   ))
                 ) : (
-                  <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">No asset accounts synced yet.</p>
+                  <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">
+                    {loadingAccounts ? 'Loading account balances...' : 'No asset account balances found for this view.'}
+                  </p>
                 )}
               </div>
             </div>
@@ -668,7 +731,7 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
 
           <div>
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]">
-              Liabilities - {fmt(summary.total_liabilities)} total
+              Liabilities - {fmt(accountLiabilityTotal)} total
             </p>
             <div className="overflow-hidden rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)]">
               <div className="px-5 py-1">
@@ -678,15 +741,17 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
                       key={account.id}
                       account={account}
                       pct={
-                        summary.total_liabilities > 0
-                          ? Math.round((Math.abs(Number(account.balance || 0)) / summary.total_liabilities) * 1000) / 10
+                        accountLiabilityTotal > 0
+                          ? Math.round((Math.abs(Number(account.balance || 0)) / accountLiabilityTotal) * 1000) / 10
                           : 0
                       }
-                      onEdit={openManualAccountModal}
+                      onEdit={selectedAccountMonth ? undefined : openManualAccountModal}
                     />
                   ))
                 ) : (
-                  <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">No liability accounts synced yet.</p>
+                  <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">
+                    {loadingAccounts ? 'Loading account balances...' : 'No liability account balances found for this view.'}
+                  </p>
                 )}
               </div>
             </div>

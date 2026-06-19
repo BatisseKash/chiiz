@@ -1023,6 +1023,17 @@ function normalizeSnapshotDate(dateValue) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : currentSnapshotDate();
 }
 
+function normalizeMonthKey(monthValue) {
+  const value = String(monthValue || '').trim();
+  return /^\d{4}-\d{2}$/.test(value) ? value : null;
+}
+
+function nextMonthKey(monthKey) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const next = new Date(Date.UTC(year, month, 1));
+  return next.toISOString().slice(0, 7);
+}
+
 function formatNetWorthAccount(row) {
   const type = normalizeNetWorthType(row);
   const balance =
@@ -1054,6 +1065,28 @@ function formatNetWorthAccount(row) {
   };
 }
 
+function formatAccountHistoryRow(row) {
+  const type = String(row.net_worth_type || '').toLowerCase();
+  const plaidType = String(row.plaid_type || '').split(':')[0] || null;
+  return {
+    id: row.account_id,
+    source: row.is_manual ? 'manual' : 'plaid',
+    plaid_account_id: null,
+    name: row.account_name,
+    balance:
+      row.account_balance === null || row.account_balance === undefined
+        ? null
+        : Number(row.account_balance),
+    type: type === 'asset' || type === 'liability' ? type : null,
+    plaid_type: plaidType,
+    subtype: row.account_subtype || null,
+    institution_name: row.institution_name || null,
+    mask: row.mask || null,
+    last_synced_at: row.created_at || null,
+    balance_date: row.snapshot_date || null,
+  };
+}
+
 async function fetchNetWorthAccountsForUser(userId) {
   const params = new URLSearchParams({
     select:
@@ -1071,6 +1104,196 @@ async function fetchNetWorthAccountsForUser(userId) {
     .filter((account) => account.type && account.balance !== null);
 }
 
+async function fetchNetWorthAccountHistoryForMonth(userId, monthKey) {
+  const nextMonth = nextMonthKey(monthKey);
+  const params = new URLSearchParams({
+    select:
+      'id,user_id,account_id,snapshot_date,account_balance,net_worth_type,plaid_type,account_subtype,account_name,institution_name,mask,is_manual,created_at',
+    user_id: `eq.${userId}`,
+    snapshot_date: `gte.${monthKey}-01`,
+    order: 'account_id.asc,snapshot_date.desc,created_at.desc',
+    limit: '1000',
+  });
+  params.append('snapshot_date', `lt.${nextMonth}-01`);
+
+  const rows = await supabaseRequest(`/rest/v1/account_history?${params.toString()}`, {
+    method: 'GET',
+  });
+
+  const latestByAccountId = new Map();
+  for (const row of rows) {
+    if (!row.account_id || latestByAccountId.has(row.account_id)) {
+      continue;
+    }
+    latestByAccountId.set(row.account_id, row);
+  }
+
+  return [...latestByAccountId.values()]
+    .map(formatAccountHistoryRow)
+    .filter((account) => account.type && account.balance !== null);
+}
+
+async function fetchNetWorthAccountMonths(userId) {
+  const params = new URLSearchParams({
+    select: 'snapshot_date',
+    user_id: `eq.${userId}`,
+    order: 'snapshot_date.desc,created_at.desc',
+    limit: '1000',
+  });
+  const rows = await supabaseRequest(`/rest/v1/account_history?${params.toString()}`, {
+    method: 'GET',
+  });
+  const months = [];
+  const seen = new Set();
+  for (const row of rows) {
+    const monthKey = normalizeMonthKey(String(row.snapshot_date || '').slice(0, 7));
+    if (!monthKey || seen.has(monthKey)) {
+      continue;
+    }
+    seen.add(monthKey);
+    months.push(monthKey);
+  }
+  return months;
+}
+
+async function fetchNetWorthHistoryFromAccountHistory(userId) {
+  const params = new URLSearchParams({
+    select: 'account_id,snapshot_date,account_balance,net_worth_type,created_at',
+    user_id: `eq.${userId}`,
+    order: 'snapshot_date.desc,created_at.desc',
+    limit: '5000',
+  });
+  const rows = await supabaseRequest(`/rest/v1/account_history?${params.toString()}`, {
+    method: 'GET',
+  });
+
+  const latestByMonthAccount = new Map();
+  for (const row of rows) {
+    const monthKey = normalizeMonthKey(String(row.snapshot_date || '').slice(0, 7));
+    if (!monthKey || !row.account_id) {
+      continue;
+    }
+    const key = `${monthKey}:${row.account_id}`;
+    if (latestByMonthAccount.has(key)) {
+      continue;
+    }
+    latestByMonthAccount.set(key, row);
+  }
+
+  const byMonth = new Map();
+  for (const row of latestByMonthAccount.values()) {
+    const monthKey = String(row.snapshot_date || '').slice(0, 7);
+    if (!byMonth.has(monthKey)) {
+      byMonth.set(monthKey, {
+        id: `account-history-${monthKey}`,
+        snapshot_date: `${monthKey}-01`,
+        total_assets: 0,
+        total_liabilities: 0,
+        net_worth: 0,
+        change_amount: null,
+        created_at: row.created_at,
+        updated_at: row.created_at,
+      });
+    }
+    const month = byMonth.get(monthKey);
+    const balance = Math.abs(Number(row.account_balance || 0));
+    if (row.net_worth_type === 'asset') {
+      month.total_assets += balance;
+    } else if (row.net_worth_type === 'liability') {
+      month.total_liabilities += balance;
+    }
+    month.net_worth = month.total_assets - month.total_liabilities;
+    if (row.created_at && (!month.created_at || row.created_at > month.created_at)) {
+      month.created_at = row.created_at;
+      month.updated_at = row.created_at;
+    }
+  }
+
+  return [...byMonth.values()]
+    .sort((a, b) => b.snapshot_date.localeCompare(a.snapshot_date))
+    .slice(0, 12)
+    .reverse();
+}
+
+async function fetchAllProfileIds() {
+  const params = new URLSearchParams({
+    select: 'id',
+    order: 'created_at.asc',
+    limit: '1000',
+  });
+  const rows = await supabaseRequest(`/rest/v1/profiles?${params.toString()}`, {
+    method: 'GET',
+  });
+  return rows.map((row) => row.id).filter(Boolean);
+}
+
+function zonedDateParts(date = new Date(), timeZone = 'America/Los_Angeles') {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(date).map((part) => [part.type, part.value]),
+  );
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour),
+    dateKey: `${parts.year}-${parts.month}-${parts.day}`,
+  };
+}
+
+function isLastDayOfMonth({ year, month, day }) {
+  if (!year || !month || !day) {
+    return false;
+  }
+  return day === new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+let lastMonthEndAccountHistoryRunDate = null;
+
+async function runMonthEndAccountHistorySyncIfDue() {
+  const parts = zonedDateParts();
+  if (
+    !isLastDayOfMonth(parts) ||
+    parts.hour < 23 ||
+    lastMonthEndAccountHistoryRunDate === parts.dateKey
+  ) {
+    return;
+  }
+
+  lastMonthEndAccountHistoryRunDate = parts.dateKey;
+  const snapshotDate = parts.dateKey;
+  console.log(`Running month-end account balance snapshot for ${snapshotDate}.`);
+
+  const userIds = await fetchAllProfileIds();
+  for (const userId of userIds) {
+    try {
+      await plaidSyncService.syncAllUserItems(userId);
+      await recordNetWorthSnapshotForUser(userId, snapshotDate);
+    } catch (error) {
+      console.error(
+        `Month-end account balance snapshot failed for user ${userId}:`,
+        error.details || error.message,
+      );
+    }
+  }
+}
+
+function startMonthEndAccountHistoryJob() {
+  setTimeout(() => {
+    void runMonthEndAccountHistorySyncIfDue();
+  }, 10_000);
+  setInterval(() => {
+    void runMonthEndAccountHistorySyncIfDue();
+  }, 60 * 60 * 1000);
+}
+
 function calculateNetWorthSummary(accounts) {
   let totalAssets = 0;
   let totalLiabilities = 0;
@@ -1086,7 +1309,37 @@ function calculateNetWorthSummary(accounts) {
       if (plaidType === 'depository' && ['checking', 'savings'].includes(subtype)) {
         checkingSavings += balance;
       }
-      if (['investment', 'brokerage'].includes(plaidType)) {
+      const manualInvestmentText = [
+        account.name,
+        account.institution_name,
+        account.subtype,
+        account.plaid_type,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      const manualInvestmentKeywords = [
+        'brokerage',
+        'coinbase',
+        'crypto',
+        'digital wallet',
+        'etf',
+        'investment',
+        'ira',
+        'portfolio',
+        'retirement',
+        'roth',
+        'securities',
+        'stock',
+        'wallet',
+        '401k',
+      ];
+      const isManualInvestment =
+        account.source === 'manual' &&
+        !['checking', 'savings'].includes(subtype) &&
+        manualInvestmentKeywords.some((keyword) => manualInvestmentText.includes(keyword));
+
+      if (['investment', 'brokerage'].includes(plaidType) || isManualInvestment) {
         investments += balance;
       }
     } else if (account.type === 'liability') {
@@ -1168,10 +1421,45 @@ async function fetchManualNetWorthAccountById(userId, accountId) {
   return formattedAccount.source === 'manual' ? formattedAccount : null;
 }
 
+async function recordAccountHistoryForUser(userId, snapshotDateValue, accounts) {
+  const snapshotDate = normalizeSnapshotDate(snapshotDateValue);
+  const rows = accounts
+    .filter((account) => account.id && account.type && account.balance !== null)
+    .map((account) => ({
+      user_id: userId,
+      account_id: account.id,
+      snapshot_date: snapshotDate,
+      account_balance: Math.abs(Number(account.balance || 0)),
+      net_worth_type: account.type,
+      plaid_type: account.plaid_type,
+      account_subtype: account.subtype,
+      account_name: account.name,
+      institution_name: account.institution_name,
+      mask: account.mask,
+      is_manual: account.source === 'manual',
+    }));
+
+  if (!rows.length) {
+    return 0;
+  }
+
+  await supabaseRequest('/rest/v1/account_history', {
+    method: 'POST',
+    headers: {
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(rows),
+  });
+
+  return rows.length;
+}
+
 async function recordNetWorthSnapshotForUser(userId, snapshotDateValue) {
   const accounts = await fetchNetWorthAccountsForUser(userId);
   const summary = calculateNetWorthSummary(accounts);
   const snapshotDate = normalizeSnapshotDate(snapshotDateValue);
+
+  await recordAccountHistoryForUser(userId, snapshotDate, accounts);
 
   await supabaseRequest('/rest/v1/net_worth_snapshots', {
     method: 'POST',
@@ -3365,12 +3653,27 @@ app.get(['/api/net-worth/summary', '/net-worth/summary'], requireAuth, async (re
 
 app.get(['/api/net-worth/accounts', '/net-worth/accounts'], requireAuth, async (req, res) => {
   try {
-    const accounts = await fetchNetWorthAccountsForUser(req.userId);
-    return res.json({ accounts });
+    const monthKey = normalizeMonthKey(req.query?.month);
+    const accounts = monthKey
+      ? await fetchNetWorthAccountHistoryForMonth(req.userId, monthKey)
+      : await fetchNetWorthAccountsForUser(req.userId);
+    return res.json({ accounts, month: monthKey });
   } catch (error) {
     console.error('Net worth accounts failed:', error.details || error.message);
     return res.status(error.statusCode || 500).json({
       error: 'Failed to fetch net worth accounts.',
+    });
+  }
+});
+
+app.get(['/api/net-worth/account-months', '/net-worth/account-months'], requireAuth, async (req, res) => {
+  try {
+    const months = await fetchNetWorthAccountMonths(req.userId);
+    return res.json({ months });
+  } catch (error) {
+    console.error('Net worth account months failed:', error.details || error.message);
+    return res.status(error.statusCode || 500).json({
+      error: 'Failed to fetch net worth account months.',
     });
   }
 });
@@ -3462,6 +3765,11 @@ app.patch(['/api/net-worth/manual-accounts/:accountId', '/net-worth/manual-accou
 
 app.get(['/api/net-worth/history', '/net-worth/history'], requireAuth, async (req, res) => {
   try {
+    const accountHistoryRows = await fetchNetWorthHistoryFromAccountHistory(req.userId);
+    if (accountHistoryRows.length) {
+      return res.json({ snapshots: accountHistoryRows });
+    }
+
     const params = new URLSearchParams({
       select: 'id,snapshot_date,total_assets,total_liabilities,net_worth,change_amount,created_at,updated_at',
       user_id: `eq.${req.userId}`,
@@ -4111,7 +4419,9 @@ if (require.main === module) {
   app.listen(3000, () => {
     console.log(`Server running on http://localhost:3000 (boot ${SERVER_BOOT_ID})`);
     console.log('Plaid sync uses stored encrypted access tokens and transactions/sync cursors.');
+    console.log('Month-end account balance snapshots run after 11 PM Pacific on the last day of each month.');
     console.log('TODO: add webhook-triggered sync and persisted item health tracking for production.');
+    startMonthEndAccountHistoryJob();
   });
 }
 
