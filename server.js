@@ -88,10 +88,11 @@ const PASSWORD_RESET_TOKEN_TTL_MINUTES = Number(process.env.PASSWORD_RESET_TOKEN
 const PASSWORD_RESET_FROM_EMAIL =
   process.env.PASSWORD_RESET_FROM_EMAIL || process.env.RESET_PASSWORD_FROM_EMAIL || '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const APP_BASE_URL = String(process.env.APP_BASE_URL || '').trim().replace(/\/+$/, '');
 const IS_LOCALHOST =
-  process.env.APP_BASE_URL?.includes('localhost') ||
-  process.env.APP_BASE_URL?.includes('127.0.0.1') ||
-  !process.env.APP_BASE_URL;
+  APP_BASE_URL
+    ? isLocalhostUrl(APP_BASE_URL) && process.env.VERCEL !== '1'
+    : process.env.NODE_ENV !== 'production' && process.env.VERCEL !== '1';
 const itemHealthCache = new Map();
 const MAX_UPLOAD_ROWS = 1000;
 const MAX_UPLOAD_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -718,34 +719,60 @@ function hashValue(value) {
   return crypto.createHash('sha256').update(String(value || '')).digest('hex');
 }
 
+function isLocalhostUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
+  } catch (error) {
+    return false;
+  }
+}
+
+function getRequestOrigin(req) {
+  const origin = String(req.headers.origin || '').trim();
+  if (/^https?:\/\//i.test(origin)) {
+    return origin.replace(/\/+$/, '');
+  }
+
+  const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
+  const host = forwardedHost || req.get('host');
+  if (!host) {
+    return '';
+  }
+
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const protocol = forwardedProto || req.protocol || 'https';
+  return `${protocol}://${host}`.replace(/\/+$/, '');
+}
+
+function isLocalRequest(req) {
+  return isLocalhostUrl(getRequestOrigin(req));
+}
+
+function isPasswordResetEmailConfigured() {
+  return Boolean(RESEND_API_KEY && PASSWORD_RESET_FROM_EMAIL);
+}
+
 function createPasswordResetToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
 function resolveAppBaseUrl(req) {
-  if (process.env.APP_BASE_URL) {
-    return process.env.APP_BASE_URL.replace(/\/+$/, '');
+  const requestOrigin = getRequestOrigin(req);
+
+  if (APP_BASE_URL && !isLocalhostUrl(APP_BASE_URL)) {
+    return APP_BASE_URL;
   }
 
-  if (IS_LOCALHOST) {
-    return 'http://localhost:5173';
+  if (requestOrigin) {
+    return requestOrigin;
   }
 
-  const forwardedProto = req.headers['x-forwarded-proto'];
-  const protocol =
-    typeof forwardedProto === 'string'
-      ? forwardedProto.split(',')[0].trim()
-      : req.protocol || 'https';
-  const host = req.get('host');
-  if (!host) {
-    return '';
-  }
-
-  return `${protocol}://${host}`;
+  return APP_BASE_URL || (IS_LOCALHOST ? 'http://localhost:5173' : '');
 }
 
 async function sendPasswordResetEmail({ toEmail, resetLink }) {
-  if (!RESEND_API_KEY || !PASSWORD_RESET_FROM_EMAIL) {
+  if (!isPasswordResetEmailConfigured()) {
     return { delivered: false };
   }
 
@@ -767,7 +794,12 @@ async function sendPasswordResetEmail({ toEmail, resetLink }) {
   });
 
   const text = await response.text();
-  const body = text ? JSON.parse(text) : null;
+  let body = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch (parseError) {
+    body = text ? { message: text.slice(0, 500) } : null;
+  }
   if (!response.ok) {
     const error = new Error('Failed to send password reset email.');
     error.statusCode = response.status;
@@ -2255,6 +2287,9 @@ app.get('/api/debug', async (req, res) => {
     app_base_url: process.env.APP_BASE_URL || null,
     has_client_id: !!process.env.PLAID_CLIENT_ID,
     has_secret: !!process.env.PLAID_SECRET,
+    password_reset_email_configured: isPasswordResetEmailConfigured(),
+    has_resend_api_key: !!RESEND_API_KEY,
+    has_password_reset_from_email: !!PASSWORD_RESET_FROM_EMAIL,
     linked_item_count: linkedItems,
     products: PLAID_PRODUCTS,
     country_codes: PLAID_COUNTRY_CODES,
@@ -2271,6 +2306,16 @@ app.post(['/api/auth/forgot_password', '/auth/forgot_password'], async (req, res
     if (!email || !validateEmail(email)) {
       return res.status(400).json({
         error: 'Please enter a valid email address.',
+      });
+    }
+
+    const canUseDevResetLink = IS_LOCALHOST || isLocalRequest(req);
+    if (!isPasswordResetEmailConfigured() && !canUseDevResetLink) {
+      console.error(
+        'Password reset email is not configured. Set RESEND_API_KEY and PASSWORD_RESET_FROM_EMAIL.',
+      );
+      return res.status(503).json({
+        error: 'Password reset email is not configured.',
       });
     }
 
@@ -2332,7 +2377,7 @@ app.post(['/api/auth/forgot_password', '/auth/forgot_password'], async (req, res
         resetLink,
       });
 
-      if (!emailResult.delivered && IS_LOCALHOST) {
+      if (!emailResult.delivered && canUseDevResetLink) {
         devResetLink = resetLink;
         console.warn(
           'Password reset email was not sent because RESEND_API_KEY or PASSWORD_RESET_FROM_EMAIL is missing.',
