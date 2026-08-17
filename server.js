@@ -514,17 +514,31 @@ async function fetchHistoricalUploadMonths(userId) {
 }
 
 async function fetchUnifiedMonthlyCategoryAmountsForUser(userId) {
-  const transactionRows = await supabaseRequest(
-    `/rest/v1/transactions?${new URLSearchParams({
+  const pageSize = 1000;
+  let offset = 0;
+  const transactionRows = [];
+
+  while (true) {
+    const params = new URLSearchParams({
       select:
         'date,amount,category_id,categorization_source,ignored_from_budget,institution_name,plaid_transaction_id,category:categories(id,category_name,category_type)',
       user_id: `eq.${userId}`,
       category_id: 'not.is.null',
       order: 'date.asc',
-      limit: '10000',
-    }).toString()}`,
-    { method: 'GET' },
-  );
+      limit: String(pageSize),
+      offset: String(offset),
+    });
+
+    const page = await supabaseRequest(`/rest/v1/transactions?${params.toString()}`, {
+      method: 'GET',
+    });
+    transactionRows.push(...page);
+
+    if (page.length < pageSize) {
+      break;
+    }
+    offset += pageSize;
+  }
 
   const transactionAggregated = new Map();
   for (const row of transactionRows) {
