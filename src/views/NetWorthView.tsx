@@ -451,6 +451,9 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
     [liabilities],
   );
   const hasBalances = summary.has_balances && accounts.length > 0;
+  const latestAccountMonth = accountMonths[0] || '';
+  const canEditManualAccounts =
+    !selectedAccountMonth || selectedAccountMonth === latestAccountMonth;
 
   const chartData = useMemo(() => {
     const rows = history.length
@@ -692,7 +695,7 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
               </p>
               <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
                 {selectedAccountMonth
-                  ? `Showing latest account snapshot for ${formatDateLabel(`${selectedAccountMonth}-01`)}`
+                  ? `${canEditManualAccounts ? 'Showing latest account snapshot' : 'Showing historical account snapshot'} for ${formatDateLabel(`${selectedAccountMonth}-01`)}`
                   : 'Account month snapshots will appear after the next balance sync'}
               </p>
             </div>
@@ -736,7 +739,7 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
                           : 0
                       }
                       color={assetColors[index % assetColors.length]}
-                      onEdit={selectedAccountMonth ? undefined : openManualAccountModal}
+                      onEdit={canEditManualAccounts ? openManualAccountModal : undefined}
                     />
                   ))
                 ) : (
@@ -764,7 +767,7 @@ export function NetWorthView({ onOpenLinkedAccounts }: NetWorthViewProps) {
                           ? Math.round((Math.abs(Number(account.balance || 0)) / accountLiabilityTotal) * 1000) / 10
                           : 0
                       }
-                      onEdit={selectedAccountMonth ? undefined : openManualAccountModal}
+                      onEdit={canEditManualAccounts ? openManualAccountModal : undefined}
                     />
                   ))
                 ) : (
