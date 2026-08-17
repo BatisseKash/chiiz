@@ -517,7 +517,7 @@ async function fetchUnifiedMonthlyCategoryAmountsForUser(userId) {
   const transactionRows = await supabaseRequest(
     `/rest/v1/transactions?${new URLSearchParams({
       select:
-        'date,amount,category_id,categorization_source,ignored_from_budget,category:categories(id,category_name,category_type)',
+        'date,amount,category_id,categorization_source,ignored_from_budget,institution_name,plaid_transaction_id,category:categories(id,category_name,category_type)',
       user_id: `eq.${userId}`,
       category_id: 'not.is.null',
       order: 'date.asc',
@@ -540,7 +540,7 @@ async function fetchUnifiedMonthlyCategoryAmountsForUser(userId) {
     const amountRaw = Number(row.amount || 0);
     let normalizedAmount = 0;
     if (categoryType === 'income') {
-      normalizedAmount = amountRaw < 0 ? Math.abs(amountRaw) : 0;
+      normalizedAmount = Math.abs(amountRaw);
     } else {
       normalizedAmount = amountRaw;
     }
@@ -753,6 +753,27 @@ function isPasswordResetEmailConfigured() {
   return Boolean(RESEND_API_KEY && PASSWORD_RESET_FROM_EMAIL);
 }
 
+function isResendTestSender(value) {
+  return /@resend\.dev\b/i.test(String(value || ''));
+}
+
+function getPasswordResetEmailConfigError(req) {
+  const canUseDevResetLink = IS_LOCALHOST || isLocalRequest(req);
+  if (canUseDevResetLink) {
+    return null;
+  }
+
+  if (!isPasswordResetEmailConfigured()) {
+    return 'Password reset email is not configured. Set RESEND_API_KEY and PASSWORD_RESET_FROM_EMAIL.';
+  }
+
+  if (isResendTestSender(PASSWORD_RESET_FROM_EMAIL)) {
+    return 'Password reset email is using Resend test sender. Use an email address on a verified Resend domain.';
+  }
+
+  return null;
+}
+
 function createPasswordResetToken() {
   return crypto.randomBytes(32).toString('hex');
 }
@@ -802,6 +823,7 @@ async function sendPasswordResetEmail({ toEmail, resetLink }) {
   }
   if (!response.ok) {
     const error = new Error('Failed to send password reset email.');
+    error.service = 'resend';
     error.statusCode = response.status;
     error.details = body;
     throw error;
@@ -1593,7 +1615,10 @@ function chunkRows(rows, size) {
 
 function isConfirmedStoredTransaction(transaction) {
   const source = String(transaction.categorization_source || '').toLowerCase();
-  return Boolean(transaction.ignored_from_budget) || source === 'user';
+  const isHistoricalUpload =
+    String(transaction.institution_name || '').toLowerCase() === 'historical upload' ||
+    String(transaction.plaid_transaction_id || '').startsWith('upload_');
+  return Boolean(transaction.ignored_from_budget) || source === 'user' || (source === 'mapped' && isHistoricalUpload);
 }
 
 function transactionMatchesSearch(transaction, query) {
@@ -2290,6 +2315,7 @@ app.get('/api/debug', async (req, res) => {
     password_reset_email_configured: isPasswordResetEmailConfigured(),
     has_resend_api_key: !!RESEND_API_KEY,
     has_password_reset_from_email: !!PASSWORD_RESET_FROM_EMAIL,
+    password_reset_uses_resend_test_sender: isResendTestSender(PASSWORD_RESET_FROM_EMAIL),
     linked_item_count: linkedItems,
     products: PLAID_PRODUCTS,
     country_codes: PLAID_COUNTRY_CODES,
@@ -2310,12 +2336,11 @@ app.post(['/api/auth/forgot_password', '/auth/forgot_password'], async (req, res
     }
 
     const canUseDevResetLink = IS_LOCALHOST || isLocalRequest(req);
-    if (!isPasswordResetEmailConfigured() && !canUseDevResetLink) {
-      console.error(
-        'Password reset email is not configured. Set RESEND_API_KEY and PASSWORD_RESET_FROM_EMAIL.',
-      );
+    const emailConfigError = getPasswordResetEmailConfigError(req);
+    if (emailConfigError) {
+      console.error(emailConfigError);
       return res.status(503).json({
-        error: 'Password reset email is not configured.',
+        error: emailConfigError,
       });
     }
 
@@ -2397,6 +2422,17 @@ app.post(['/api/auth/forgot_password', '/auth/forgot_password'], async (req, res
     return res.json(response);
   } catch (err) {
     console.error('Forgot password error:', err.details || err.message);
+    if (err.service === 'resend') {
+      const providerMessage =
+        err.details?.message ||
+        err.details?.error ||
+        err.details?.name ||
+        'Resend rejected the password reset email.';
+      return res.status(502).json({
+        error: `Password reset email could not be sent: ${providerMessage}`,
+      });
+    }
+
     return res.status(err.statusCode || 500).json({
       error: 'Failed to process forgot password request.',
     });

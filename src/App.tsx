@@ -88,7 +88,10 @@ function parseIsoDate(value: string) {
 
 function isTransactionConfirmed(transaction: PlaidTransaction) {
   const source = String(transaction.categorization_source || '').toLowerCase();
-  return Boolean(transaction.ignored_from_budget) || source === 'user';
+  const isHistoricalUpload =
+    String(transaction.institution_name || '').toLowerCase() === 'historical upload' ||
+    String(transaction.transaction_id || '').startsWith('upload_');
+  return Boolean(transaction.ignored_from_budget) || source === 'user' || (source === 'mapped' && isHistoricalUpload);
 }
 
 function includeTransactionInActuals(transaction: PlaidTransaction) {
@@ -486,85 +489,98 @@ function App() {
       }
     >();
 
-    for (const transaction of filteredDashboardTransactions) {
-      const categoryId = transaction.category_id || '';
-      if (!categoryId) {
-        continue;
-      }
+    if (dashboardAccount === 'all') {
+      for (const row of filteredUnifiedMonthlyRows) {
+        if (!categoryById.has(row.categoryId)) {
+          continue;
+        }
 
-      const category = categoryById.get(categoryId);
-      if (!category) {
-        continue;
-      }
-
-      const amount = Number(transaction.amount || 0);
-      const categoryName = transaction.category_name || category.name || '';
-      const monthKey = String(transaction.date || '').slice(0, 7);
-      const hasMonthKey = /^\d{4}-\d{2}$/.test(monthKey);
-
-      if (hasMonthKey && isGamblingExpenseCategoryName(categoryName) && amount > 0) {
-        const entry =
-          gamblingByMonth.get(monthKey) ||
-          {
-            expenseTotal: 0,
-            winningsTotal: 0,
-            expenseCategoryIds: new Set<string>(),
-            winningsCategoryIds: new Set<string>(),
-          };
-        entry.expenseTotal += amount;
-        entry.expenseCategoryIds.add(categoryId);
-        gamblingByMonth.set(monthKey, entry);
-        continue;
-      }
-
-      if (hasMonthKey && isGamblingWinningsCategoryName(categoryName) && amount < 0) {
-        const entry =
-          gamblingByMonth.get(monthKey) ||
-          {
-            expenseTotal: 0,
-            winningsTotal: 0,
-            expenseCategoryIds: new Set<string>(),
-            winningsCategoryIds: new Set<string>(),
-          };
-        entry.winningsTotal += Math.abs(amount);
-        entry.winningsCategoryIds.add(categoryId);
-        gamblingByMonth.set(monthKey, entry);
-        continue;
-      }
-
-      const resolvedCategoryType =
-        transaction.category_type ||
-        category.categoryType ||
-        (amount < 0 ? 'income' : 'expense');
-
-      if (resolvedCategoryType === 'income') {
-        actualByCategoryId.set(categoryId, (actualByCategoryId.get(categoryId) || 0) + Math.abs(amount));
-      } else if (amount > 0) {
-        actualByCategoryId.set(categoryId, (actualByCategoryId.get(categoryId) || 0) + amount);
-      } else if (amount < 0) {
-        // Expense-category credits reduce spend and should match Performance aggregation.
         actualByCategoryId.set(
-          categoryId,
-          (actualByCategoryId.get(categoryId) || 0) - Math.abs(amount),
+          row.categoryId,
+          (actualByCategoryId.get(row.categoryId) || 0) + Number(row.amount || 0),
         );
       }
-    }
+    } else {
+      for (const transaction of filteredDashboardTransactions) {
+        const categoryId = transaction.category_id || '';
+        if (!categoryId) {
+          continue;
+        }
 
-    for (const monthEntry of gamblingByMonth.values()) {
-      const net = getMonthlyGamblingNetAmounts(monthEntry.expenseTotal, monthEntry.winningsTotal);
-      const expenseCategoryId = [...monthEntry.expenseCategoryIds][0];
-      const winningsCategoryId = [...monthEntry.winningsCategoryIds][0];
-      if (expenseCategoryId && net.expenseDisplayAmount > 0) {
-        actualByCategoryId.set(
-          expenseCategoryId,
-          (actualByCategoryId.get(expenseCategoryId) || 0) + net.expenseDisplayAmount,
-        );
+        const category = categoryById.get(categoryId);
+        if (!category) {
+          continue;
+        }
+
+        const amount = Number(transaction.amount || 0);
+        const categoryName = transaction.category_name || category.name || '';
+        const monthKey = String(transaction.date || '').slice(0, 7);
+        const hasMonthKey = /^\d{4}-\d{2}$/.test(monthKey);
+
+        if (hasMonthKey && isGamblingExpenseCategoryName(categoryName) && amount > 0) {
+          const entry =
+            gamblingByMonth.get(monthKey) ||
+            {
+              expenseTotal: 0,
+              winningsTotal: 0,
+              expenseCategoryIds: new Set<string>(),
+              winningsCategoryIds: new Set<string>(),
+            };
+          entry.expenseTotal += amount;
+          entry.expenseCategoryIds.add(categoryId);
+          gamblingByMonth.set(monthKey, entry);
+          continue;
+        }
+
+        if (hasMonthKey && isGamblingWinningsCategoryName(categoryName) && amount < 0) {
+          const entry =
+            gamblingByMonth.get(monthKey) ||
+            {
+              expenseTotal: 0,
+              winningsTotal: 0,
+              expenseCategoryIds: new Set<string>(),
+              winningsCategoryIds: new Set<string>(),
+            };
+          entry.winningsTotal += Math.abs(amount);
+          entry.winningsCategoryIds.add(categoryId);
+          gamblingByMonth.set(monthKey, entry);
+          continue;
+        }
+
+        const resolvedCategoryType =
+          transaction.category_type ||
+          category.categoryType ||
+          (amount < 0 ? 'income' : 'expense');
+
+        if (resolvedCategoryType === 'income') {
+          actualByCategoryId.set(categoryId, (actualByCategoryId.get(categoryId) || 0) + Math.abs(amount));
+        } else if (amount > 0) {
+          actualByCategoryId.set(categoryId, (actualByCategoryId.get(categoryId) || 0) + amount);
+        } else if (amount < 0) {
+          // Expense-category credits reduce spend and should match Performance aggregation.
+          actualByCategoryId.set(
+            categoryId,
+            (actualByCategoryId.get(categoryId) || 0) - Math.abs(amount),
+          );
+        }
       }
-      if (winningsCategoryId && net.winningsDisplayAmount > 0) {
-        actualByCategoryId.set(
-          winningsCategoryId,
-          (actualByCategoryId.get(winningsCategoryId) || 0) + net.winningsDisplayAmount,
-        );
+
+      for (const monthEntry of gamblingByMonth.values()) {
+        const net = getMonthlyGamblingNetAmounts(monthEntry.expenseTotal, monthEntry.winningsTotal);
+        const expenseCategoryId = [...monthEntry.expenseCategoryIds][0];
+        const winningsCategoryId = [...monthEntry.winningsCategoryIds][0];
+        if (expenseCategoryId && net.expenseDisplayAmount > 0) {
+          actualByCategoryId.set(
+            expenseCategoryId,
+            (actualByCategoryId.get(expenseCategoryId) || 0) + net.expenseDisplayAmount,
+          );
+        }
+        if (winningsCategoryId && net.winningsDisplayAmount > 0) {
+          actualByCategoryId.set(
+            winningsCategoryId,
+            (actualByCategoryId.get(winningsCategoryId) || 0) + net.winningsDisplayAmount,
+          );
+        }
       }
     }
 
@@ -580,7 +596,14 @@ function App() {
       ...category,
       actual: actualByCategoryId.get(category.id) || 0,
     }));
-  }, [categories, dashboardCategory, dashboardTransactionType, filteredDashboardTransactions]);
+  }, [
+    categories,
+    dashboardAccount,
+    dashboardCategory,
+    dashboardTransactionType,
+    filteredDashboardTransactions,
+    filteredUnifiedMonthlyRows,
+  ]);
 
   const summary = useMemo<SummaryMetric[]>(() => {
     let income = 0;
@@ -595,70 +618,81 @@ function App() {
       }
     >();
 
-    for (const transaction of filteredDashboardTransactions) {
-      const parsedDate = parseIsoDate(transaction.date);
-      if (!parsedDate) {
-        continue;
-      }
-      const monthKey = monthValueFromDate(parsedDate);
-      if (!monthlySummary.has(monthKey)) {
-        monthlySummary.set(monthKey, {
-          income: 0,
-          expenses: 0,
-          gamblingExpenses: 0,
-          gamblingWinnings: 0,
-        });
-      }
-
-      const entry = monthlySummary.get(monthKey)!;
-      const amount = Number(transaction.amount || 0);
-      const categoryName = transaction.category_name || '';
-      const categoryType =
-        transaction.category_type ||
-        (transaction.category_id ? categoryTypeById.get(transaction.category_id) || null : null);
-
-      if (isGamblingExpenseCategoryName(categoryName)) {
-        if (amount > 0) {
-          entry.gamblingExpenses += amount;
+    if (dashboardAccount === 'all') {
+      for (const row of filteredUnifiedMonthlyRows) {
+        const amount = Number(row.amount || 0);
+        if (row.categoryType === 'income') {
+          income += Math.abs(amount);
+        } else {
+          expenses += amount;
         }
-        continue;
       }
+    } else {
+      for (const transaction of filteredDashboardTransactions) {
+        const parsedDate = parseIsoDate(transaction.date);
+        if (!parsedDate) {
+          continue;
+        }
+        const monthKey = monthValueFromDate(parsedDate);
+        if (!monthlySummary.has(monthKey)) {
+          monthlySummary.set(monthKey, {
+            income: 0,
+            expenses: 0,
+            gamblingExpenses: 0,
+            gamblingWinnings: 0,
+          });
+        }
 
-      if (isGamblingWinningsCategoryName(categoryName)) {
+        const entry = monthlySummary.get(monthKey)!;
+        const amount = Number(transaction.amount || 0);
+        const categoryName = transaction.category_name || '';
+        const categoryType =
+          transaction.category_type ||
+          (transaction.category_id ? categoryTypeById.get(transaction.category_id) || null : null);
+
+        if (isGamblingExpenseCategoryName(categoryName)) {
+          if (amount > 0) {
+            entry.gamblingExpenses += amount;
+          }
+          continue;
+        }
+
+        if (isGamblingWinningsCategoryName(categoryName)) {
+          if (amount < 0) {
+            entry.gamblingWinnings += Math.abs(amount);
+          }
+          continue;
+        }
+
+        if (categoryType === 'income') {
+          // Income categories should contribute to income regardless of upstream sign conventions.
+          entry.income += Math.abs(amount);
+          continue;
+        }
+
+        if (categoryType === 'expense') {
+          if (amount > 0) {
+            entry.expenses += amount;
+          } else if (amount < 0) {
+            // Expense-category credits reduce total spending.
+            entry.expenses -= Math.abs(amount);
+          }
+          continue;
+        }
+
+        // Fallback for uncategorized rows.
         if (amount < 0) {
-          entry.gamblingWinnings += Math.abs(amount);
-        }
-        continue;
-      }
-
-      if (categoryType === 'income') {
-        // Income categories should contribute to income regardless of upstream sign conventions.
-        entry.income += Math.abs(amount);
-        continue;
-      }
-
-      if (categoryType === 'expense') {
-        if (amount > 0) {
+          entry.income += Math.abs(amount);
+        } else if (amount > 0) {
           entry.expenses += amount;
-        } else if (amount < 0) {
-          // Expense-category credits reduce total spending.
-          entry.expenses -= Math.abs(amount);
         }
-        continue;
       }
 
-      // Fallback for uncategorized rows.
-      if (amount < 0) {
-        entry.income += Math.abs(amount);
-      } else if (amount > 0) {
-        entry.expenses += amount;
+      for (const month of monthlySummary.values()) {
+        const net = getMonthlyGamblingNetAmounts(month.gamblingExpenses, month.gamblingWinnings);
+        income += month.income + net.winningsDisplayAmount;
+        expenses += month.expenses + net.expenseDisplayAmount;
       }
-    }
-
-    for (const month of monthlySummary.values()) {
-      const net = getMonthlyGamblingNetAmounts(month.gamblingExpenses, month.gamblingWinnings);
-      income += month.income + net.winningsDisplayAmount;
-      expenses += month.expenses + net.expenseDisplayAmount;
     }
 
     const monthlyBudgetedExpenses = dashboardCategories
@@ -714,6 +748,7 @@ function App() {
     categoryTypeById,
     categoriesLoading,
     plaidLoading,
+    dashboardAccount,
     dashboardCategories,
     dashboardSelectedMonths.length,
     dashboardRange.label,
@@ -721,6 +756,7 @@ function App() {
     dashboardRange.start,
     dashboardTimePreset,
     filteredDashboardTransactions,
+    filteredUnifiedMonthlyRows,
   ]);
 
   const categoriesWithActual = useMemo(
